@@ -119,25 +119,47 @@ actor PlaylistSyncService {
         let apiURL = "https://music.163.com/api/playlist/detail"
         var request = URLRequest(url: URL(string: apiURL)!)
         request.httpMethod = "POST"
+        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
         request.setValue("https://music.163.com", forHTTPHeaderField: "Referer")
+        request.setValue("https://music.163.com", forHTTPHeaderField: "Origin")
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         request.httpBody = "id=\(playlistId)".data(using: .utf8)
         request.timeoutInterval = 15
 
         let (data, _) = try await URLSession.shared.data(for: request)
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let playlist = json["result"] as? [String: Any] else {
-            throw SyncError.parseError("无法解析网易云音乐响应")
+
+        let rawString = String(data: data, encoding: .utf8) ?? ""
+        print("[NetEase Playlist] raw: \(rawString.prefix(1000))")
+
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw SyncError.parseError("无法解析网易云音乐响应 - JSON无效")
         }
 
-        let playlistName = playlist["name"] as? String ?? "网易云音乐歌单"
+        // result IS the playlist object directly (not result.playlist)
+        guard let result = json["result"] as? [String: Any] else {
+            print("[NetEase] JSON keys: \(json.keys)")
+            throw SyncError.parseError("无法解析网易云音乐响应 - 找不到playlist数据")
+        }
+
+        let playlistName = result["name"] as? String ?? "网易云音乐歌单"
         var songs: [Song] = []
 
-        if let trackIds = playlist["trackIds"] as? [[String: Any]] {
-            // Batch fetch track details (max 100 per request for NetEase)
+        // API returns full track objects in "tracks" field
+        if let tracks = result["tracks"] as? [[String: Any]] {
+            print("[NetEase] Found \(tracks.count) tracks in playlist")
+            songs = tracks.prefix(100).compactMap { parseNetEaseSong($0) }
+        }
+
+        // Get playlist cover
+        var playlistCoverUrl = result["coverImgUrl"] as? String ?? result["picUrl"] as? String
+        if let url = playlistCoverUrl, url.hasPrefix("http://") {
+            playlistCoverUrl = "https://" + url.dropFirst(7)
+        } else if let trackIds = result["trackIds"] as? [[String: Any]] {
+            print("[NetEase] No tracks, fetching \(trackIds.count) trackIds...")
             let ids = trackIds.prefix(100).compactMap { $0["id"] as? Int }
             if !ids.isEmpty {
                 let trackList = try await fetchNetEaseTracks(ids: ids)
+                print("[NetEase] fetchNetEaseTracks returned \(trackList.count) songs")
                 songs = trackList
             }
         }
@@ -148,27 +170,36 @@ actor PlaylistSyncService {
             name: playlistName,
             songCount: songs.count,
             lastSyncTime: Date(),
-            songs: songs
+            songs: songs,
+            coverUrl: playlistCoverUrl
         )
     }
 
     private func fetchNetEaseTracks(ids: [Int]) async throws -> [Song] {
-        let apiURL = "https://music.163.com/api/song/detail"
+        // Use song/-enhance/getplayerplayinfo API which returns full track info
+        let apiURL = "https://music.163.com/api/song/player-detail"
         var request = URLRequest(url: URL(string: apiURL)!)
         request.httpMethod = "POST"
+        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
         request.setValue("https://music.163.com", forHTTPHeaderField: "Referer")
+        request.setValue("https://music.163.com", forHTTPHeaderField: "Origin")
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         let idsStr = ids.map { String($0) }.joined(separator: ",")
-        request.httpBody = "ids=[\(idsStr)]".data(using: .utf8)
+        request.httpBody = "ids=[\(idsStr)]&types=1".data(using: .utf8)
         request.timeoutInterval = 15
 
         let (data, _) = try await URLSession.shared.data(for: request)
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let songList = json["songs"] as? [[String: Any]] else {
+        let raw = String(data: data, encoding: .utf8) ?? ""
+        print("[NetEase Tracks] raw: \(raw.prefix(500))")
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            print("[NetEase Tracks] JSON parse failed")
             return []
         }
-
-        return songList.compactMap { parseNetEaseSong($0) }
+        print("[NetEase Tracks] JSON keys: \(json.keys)")
+        if let songs = json["songs"] as? [[String: Any]] {
+            return songs.compactMap { parseNetEaseSong($0) }
+        }
+        return []
     }
 
     private func parseNetEaseSong(_ item: [String: Any]) -> Song? {
@@ -177,11 +208,20 @@ actor PlaylistSyncService {
             return nil
         }
 
-        let artists = (item["artists"] as? [[String: Any]]) ?? (item["album"] as? [String: Any])?["artist"] as? [[String: Any]] ?? []
+        // NetEase API uses full keys: artists, album, duration
+        let artists = (item["artists"] as? [[String: Any]]) ?? []
         let artist = artists.map { $0["name"] as? String ?? "" }.joined(separator: ", ")
         let album = (item["album"] as? [String: Any])?["name"] as? String
+        var coverUrl = (item["album"] as? [String: Any])?["picUrl"] as? String
+        // Convert http to https for image loading
+        if let url = coverUrl, url.hasPrefix("http://") {
+            coverUrl = "https://" + url.dropFirst(7)
+        }
+        // duration is in milliseconds
         let duration = (item["duration"] as? Int ?? 0) / 1000
-        let coverUrl = (item["album"] as? [String: Any])?["picUrl"] as? String
+
+        // Play URL from outer URL endpoint (no auth needed, returns 302 redirect to CDN)
+        let playUrl = "https://music.163.com/song/media/outer/url?id=\(id)"
 
         return Song(
             id: "netease_\(id)",
@@ -190,7 +230,7 @@ actor PlaylistSyncService {
             artist: artist.isEmpty ? "未知艺术家" : artist,
             album: album,
             duration: duration,
-            playUrl: nil,
+            playUrl: playUrl,
             coverUrl: coverUrl
         )
     }

@@ -102,7 +102,8 @@ struct PlaylistHeader: View {
                         // Play all button
                         if !playlist.songs.isEmpty {
                             Button(action: {
-                                playerVM.play(song: playlist.songs[0], in: playlist.songs)
+                                playerVM.selectSong(playlist.songs[0], in: playlist.songs)
+                                playerVM.startPlayback()
                             }) {
                                 HStack(spacing: Theme.Spacing.xs) {
                                     Image(systemName: "play.fill")
@@ -220,7 +221,6 @@ struct SongRow: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Index
             ZStack {
                 Text("\(index)")
                     .font(.system(size: Theme.FontSize.body, design: .monospaced))
@@ -228,11 +228,9 @@ struct SongRow: View {
             }
             .frame(width: 36, alignment: .leading)
 
-            // Album art
             AlbumArtView(url: song.coverUrl, size: 40)
                 .padding(.trailing, Theme.Spacing.md)
 
-            // Title + artist
             VStack(alignment: .leading, spacing: 2) {
                 Text(song.title)
                     .font(.system(size: Theme.FontSize.body, weight: isCurrentSong ? .semibold : .medium))
@@ -246,14 +244,12 @@ struct SongRow: View {
 
             Spacer()
 
-            // Artist (desktop view)
             Text(song.artist)
                 .font(.system(size: Theme.FontSize.caption))
                 .foregroundColor(Theme.Palette.textSecondary)
                 .lineLimit(1)
                 .frame(width: 160, alignment: .leading)
 
-            // Duration
             Text(song.formattedDuration)
                 .font(.system(size: Theme.FontSize.caption, design: .monospaced))
                 .foregroundColor(Theme.Palette.textTertiary)
@@ -267,12 +263,12 @@ struct SongRow: View {
                 .padding(.horizontal, Theme.Spacing.md)
         )
         .contentShape(Rectangle())
-        .onHover { isHovered = $0 }
         .onTapGesture {
             if let playlist = playlistVM.selectedPlaylist {
-                playerVM.play(song: song, in: playlist.songs)
+                playerVM.selectSong(song, in: playlist.songs)
             }
         }
+        .onHover { isHovered = $0 }
     }
 }
 

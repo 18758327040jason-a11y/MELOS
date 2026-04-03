@@ -15,9 +15,20 @@ struct MainView: View {
             HStack(spacing: 0) {
                 // Sidebar
                 PlaylistSidebarView()
-                    .frame(width: Theme.Sizes.sidebarWidth)
+                    .frame(width: sidebarWidth)
 
-                Divider()
+                // Draggable divider
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(width: 6)
+                    .contentShape(Rectangle())
+                    .gesture(
+                        DragGesture()
+                            .onChanged { value in
+                                let newWidth = value.startLocation.x + value.translation.width
+                                sidebarWidth = min(max(newWidth, 200), 360)
+                            }
+                    )
 
                 // Main area
                 if let _ = playlistVM.selectedPlaylist {
@@ -42,6 +53,8 @@ struct MainView: View {
             await playlistVM.loadPlaylists()
         }
     }
+
+    @State private var sidebarWidth: CGFloat = 260
 }
 
 // MARK: - Title Bar

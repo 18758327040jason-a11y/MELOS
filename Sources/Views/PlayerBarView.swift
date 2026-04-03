@@ -87,10 +87,10 @@ struct PlaybackControls: View {
                 )
 
                 // Play / Pause — large
-                Button(action: { playerVM.togglePlayPause() }) {
+                Button(action: { handlePlayButton() }) {
                     ZStack {
                         Circle()
-                            .fill(playerVM.currentSong != nil ? Theme.Palette.accent : Theme.Palette.bgTertiary)
+                            .fill(buttonActive ? Theme.Palette.accent : Theme.Palette.bgTertiary)
                             .frame(
                                 width: Theme.Sizes.playButtonLarge,
                                 height: Theme.Sizes.playButtonLarge
@@ -101,15 +101,15 @@ struct PlaybackControls: View {
                                 .scaleEffect(0.6)
                                 .tint(.white)
                         } else {
-                            Image(systemName: playerVM.isPlaying ? "pause.fill" : "play.fill")
+                            Image(systemName: buttonIcon)
                                 .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(.white)
-                                .offset(x: playerVM.isPlaying ? 0 : 2)
+                                .offset(x: playerVM.playbackState == .playing ? 0 : 2)
                         }
                     }
                 }
                 .buttonStyle(.plain)
-                .disabled(playerVM.currentSong == nil)
+                .disabled(!buttonActive)
 
                 // Next
                 ControlButton(
@@ -128,8 +128,36 @@ struct PlaybackControls: View {
                 )
             }
 
-            // Progress bar
             ProgressBar()
+        }
+        .alert("播放失败", isPresented: Binding(
+            get: { playerVM.playbackError != nil },
+            set: { if !$0 { playerVM.dismissError() } }
+        )) {
+            Button("确定") { playerVM.dismissError() }
+        } message: {
+            Text(playerVM.playbackError ?? "")
+        }
+    }
+
+    // 是否可点击
+    private var buttonActive: Bool {
+        playerVM.playbackState != .idle
+    }
+
+    // 显示哪个图标：idle/ready/failed → ▶，playing → ⏸
+    private var buttonIcon: String {
+        playerVM.playbackState == .playing ? "pause.fill" : "play.fill"
+    }
+
+    private func handlePlayButton() {
+        switch playerVM.playbackState {
+        case .playing:
+            playerVM.togglePlayPause()
+        case .ready, .idle:
+            playerVM.startPlayback()
+        case .failed:
+            playerVM.startPlayback()
         }
     }
 }

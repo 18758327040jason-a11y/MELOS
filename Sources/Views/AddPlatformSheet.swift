@@ -1,4 +1,56 @@
 import SwiftUI
+import AppKit
+
+// MARK: - Plain NSTextField (no custom key handling, Cmd+C/V/A works natively)
+
+final class PlainTextField: NSTextField {
+    override func keyDown(with event: NSEvent) {
+        super.keyDown(with: event)
+    }
+}
+
+struct PlainTextFieldView: NSViewRepresentable {
+    let placeholder: String
+    @Binding var text: String
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeNSView(context: NSViewRepresentableContext<PlainTextFieldView>) -> NSTextField {
+        let field = NSTextField()
+        field.placeholderString = placeholder
+        field.stringValue = text
+        field.font = NSFont.systemFont(ofSize: 13)
+        field.bezelStyle = .roundedBezel
+        field.focusRingType = .none
+        field.delegate = context.coordinator
+        // Explicitly make this the first responder so Cmd+C/V work immediately
+        DispatchQueue.main.async {
+            field.window?.makeFirstResponder(field)
+        }
+        return field
+    }
+
+    func updateNSView(_ nsView: NSTextField, context: NSViewRepresentableContext<PlainTextFieldView>) {
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+    }
+
+    class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: PlainTextFieldView
+
+        init(_ parent: PlainTextFieldView) {
+            self.parent = parent
+        }
+
+        func controlTextDidChange(_ obj: Notification) {
+            guard let field = obj.object as? NSTextField else { return }
+            parent.text = field.stringValue
+        }
+    }
+}
 
 // MARK: - Add Platform Sheet
 
@@ -7,7 +59,6 @@ struct AddPlatformSheet: View {
     @Environment(\.dismiss) var dismiss
 
     @State private var urlInput: String = ""
-    @FocusState private var isURLFieldFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -60,24 +111,11 @@ struct AddPlatformSheet: View {
                     .foregroundColor(Theme.Palette.textSecondary)
 
                 HStack(spacing: Theme.Spacing.md) {
-                    TextField("https://y.qq.com/... 或 https://music.163.com/...", text: $urlInput)
-                        .font(.system(size: Theme.FontSize.body))
-                        .textFieldStyle(.plain)
-                        .padding(.horizontal, Theme.Spacing.md)
-                        .padding(.vertical, Theme.Spacing.md)
-                        .background(
-                            RoundedRectangle(cornerRadius: Theme.Radius.md)
-                                .fill(Theme.Palette.bgTertiary)
-                        )
-                        .focused($isURLFieldFocused)
-                        .onSubmit {
-                            if !urlInput.isEmpty {
-                                Task {
-                                    await playlistVM.addPlaylistFromURL(urlInput)
-                                }
-                            }
-                        }
-                        .keyboardShortcut(.defaultAction) // Cmd+Enter to import
+                    PlainTextFieldView(
+                        placeholder: "https://y.qq.com/... 或 https://music.163.com/...",
+                        text: $urlInput
+                    )
+                    .frame(height: 44)
 
                     Button(action: {
                         Task {
@@ -146,10 +184,6 @@ struct AddPlatformSheet: View {
             .padding(.bottom, Theme.Spacing.xl)
         }
         .frame(width: 480)
-        .onAppear {
-            isURLFieldFocused = true
-        }
-        .keyboardShortcut(.cancelAction) // Escape to dismiss
     }
 }
 
