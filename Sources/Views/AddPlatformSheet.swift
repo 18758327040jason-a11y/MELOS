@@ -70,6 +70,14 @@ struct AddPlatformSheet: View {
                                 .fill(Theme.Palette.bgTertiary)
                         )
                         .focused($isURLFieldFocused)
+                        .onSubmit {
+                            if !urlInput.isEmpty {
+                                Task {
+                                    await playlistVM.addPlaylistFromURL(urlInput)
+                                }
+                            }
+                        }
+                        .keyboardShortcut(.defaultAction) // Cmd+Enter to import
 
                     Button(action: {
                         Task {
@@ -141,6 +149,7 @@ struct AddPlatformSheet: View {
         .onAppear {
             isURLFieldFocused = true
         }
+        .keyboardShortcut(.cancelAction) // Escape to dismiss
     }
 }
 

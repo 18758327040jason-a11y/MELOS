@@ -41,6 +41,10 @@ struct MainView: View {
         .task {
             await playlistVM.loadPlaylists()
         }
+        .onKeyPress(.space) {
+            playerVM.togglePlayPause()
+            return .handled
+        }
     }
 }
 
@@ -79,6 +83,7 @@ struct TitleBar: View {
                 )
             }
             .buttonStyle(.plain)
+            .keyboardShortcut("n", modifiers: .command) // Cmd+N
         }
         .padding(.horizontal, Theme.Spacing.xxl)
         .padding(.vertical, Theme.Spacing.lg)
