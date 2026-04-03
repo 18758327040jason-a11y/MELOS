@@ -1,158 +1,157 @@
 import SwiftUI
 
+// MARK: - Player Bar (Bottom)
+
 struct PlayerBarView: View {
     @EnvironmentObject var playerVM: PlayerViewModel
 
     var body: some View {
-        VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
-            .overlay(
-                Rectangle()
-                    .fill(Color(hex: "#F8F9FA").opacity(0.95))
-            )
-            .overlay(
-                VStack(spacing: 0) {
-                    // Progress bar
-                    ProgressBar()
+        ZStack {
+            // Frosted glass background
+            VisualEffectView(material: .headerView, blendingMode: .withinWindow)
+                .opacity(0.85)
 
-                    // Controls
-                    HStack(spacing: 0) {
-                        // Left: song info
-                        SongInfoView()
-                            .frame(width: 240)
+            HStack(spacing: Theme.Spacing.xxl) {
+                // Left: song info + album art
+                SongInfoBlock()
 
-                        Spacer()
+                Spacer()
 
-                        // Center: play controls
-                        PlayControlsView()
+                // Center: playback controls
+                PlaybackControls()
 
-                        Spacer()
+                Spacer()
 
-                        // Right: volume
-                        VolumeView()
-                            .frame(width: 140)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 4)
-                }
-            )
+                // Right: volume
+                VolumeControl()
+                    .frame(width: 120)
+            }
+            .padding(.horizontal, Theme.Spacing.xxl)
+        }
     }
 }
 
-// MARK: - Song Info
+// MARK: - Song Info Block
 
-struct SongInfoView: View {
+struct SongInfoBlock: View {
     @EnvironmentObject var playerVM: PlayerViewModel
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Theme.Spacing.lg) {
             // Album art
-            Group {
-                if let coverUrl = playerVM.currentSong?.coverUrl,
-                   let url = URL(string: coverUrl) {
-                    AsyncImage(url: url) { image in
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    } placeholder: {
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color(hex: "#DADCE0"))
-                            .overlay(
-                                Image(systemName: "music.note")
-                                    .foregroundColor(Color(hex: "#5F6368"))
-                            )
-                    }
-                } else {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color(hex: "#DADCE0"))
-                        .overlay(
-                            Image(systemName: "music.note")
-                                .foregroundColor(Color(hex: "#5F6368"))
-                        )
-                }
-            }
-            .frame(width: 48, height: 48)
-            .cornerRadius(6)
+            AlbumArtView(
+                url: playerVM.currentSong?.coverUrl,
+                size: Theme.Sizes.albumArtSmall
+            )
 
-            // Title & artist
-            VStack(alignment: .leading, spacing: 2) {
+            // Title + artist
+            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                 if let song = playerVM.currentSong {
                     Text(song.title)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(Color(hex: "#202124"))
+                        .font(.system(size: Theme.FontSize.body, weight: .semibold))
+                        .foregroundColor(Theme.Palette.textPrimary)
                         .lineLimit(1)
                     Text(song.artist)
-                        .font(.system(size: 11))
-                        .foregroundColor(Color(hex: "#5F6368"))
+                        .font(.system(size: Theme.FontSize.caption))
+                        .foregroundColor(Theme.Palette.textSecondary)
                         .lineLimit(1)
                 } else {
                     Text("未播放")
-                        .font(.system(size: 13))
-                        .foregroundColor(Color(hex: "#9AA0A6"))
+                        .font(.system(size: Theme.FontSize.body))
+                        .foregroundColor(Theme.Palette.textTertiary)
                     Text("")
-                        .font(.system(size: 11))
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 0)
+        }
+        .frame(width: 240, alignment: .leading)
+    }
+}
+
+// MARK: - Playback Controls
+
+struct PlaybackControls: View {
+    @EnvironmentObject var playerVM: PlayerViewModel
+
+    var body: some View {
+        VStack(spacing: Theme.Spacing.sm) {
+            // Buttons
+            HStack(spacing: Theme.Spacing.xl) {
+                // Previous
+                ControlButton(
+                    icon: "backward.fill",
+                    size: 15,
+                    action: { playerVM.playPrevious() },
+                    disabled: playerVM.currentSong == nil
+                )
+
+                // Play / Pause — large
+                Button(action: { playerVM.togglePlayPause() }) {
+                    ZStack {
+                        Circle()
+                            .fill(playerVM.currentSong != nil ? Theme.Palette.accent : Theme.Palette.bgTertiary)
+                            .frame(
+                                width: Theme.Sizes.playButtonLarge,
+                                height: Theme.Sizes.playButtonLarge
+                            )
+
+                        if playerVM.isLoading {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                                .tint(.white)
+                        } else {
+                            Image(systemName: playerVM.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 18, weight: .bold))
+                                .foregroundColor(.white)
+                                .offset(x: playerVM.isPlaying ? 0 : 2)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                .disabled(playerVM.currentSong == nil)
+
+                // Next
+                ControlButton(
+                    icon: "forward.fill",
+                    size: 15,
+                    action: { playerVM.playNext() },
+                    disabled: playerVM.currentSong == nil
+                )
+
+                // Play mode
+                ControlButton(
+                    icon: playerVM.playMode.icon,
+                    size: 12,
+                    action: { playerVM.cyclePlayMode() },
+                    disabled: false
+                )
+            }
+
+            // Progress bar
+            ProgressBar()
         }
     }
 }
 
-// MARK: - Play Controls
+// MARK: - Control Button
 
-struct PlayControlsView: View {
-    @EnvironmentObject var playerVM: PlayerViewModel
+struct ControlButton: View {
+    let icon: String
+    let size: CGFloat
+    let action: () -> Void
+    let disabled: Bool
 
     var body: some View {
-        HStack(spacing: 16) {
-            // Previous
-            Button(action: { playerVM.playPrevious() }) {
-                Image(systemName: "backward.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(Color(hex: "#5F6368"))
-            }
-            .buttonStyle(.plain)
-            .disabled(playerVM.currentSong == nil)
-
-            // Play/Pause
-            Button(action: { playerVM.togglePlayPause() }) {
-                ZStack {
-                    Circle()
-                        .fill(Color(hex: "#1A73E8"))
-                        .frame(width: 36, height: 36)
-
-                    if playerVM.isLoading {
-                        ProgressView()
-                            .progressViewStyle(.circular)
-                            .scaleEffect(0.7)
-                            .tint(.white)
-                    } else {
-                        Image(systemName: playerVM.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.white)
-                            .offset(x: playerVM.isPlaying ? 0 : 1)
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-            .disabled(playerVM.currentSong == nil)
-
-            // Next
-            Button(action: { playerVM.playNext() }) {
-                Image(systemName: "forward.fill")
-                    .font(.system(size: 16))
-                    .foregroundColor(Color(hex: "#5F6368"))
-            }
-            .buttonStyle(.plain)
-            .disabled(playerVM.currentSong == nil)
-
-            // Play mode
-            Button(action: { playerVM.cyclePlayMode() }) {
-                Image(systemName: playerVM.playMode.icon)
-                    .font(.system(size: 12))
-                    .foregroundColor(Color(hex: "#5F6368"))
-            }
-            .buttonStyle(.plain)
-            .padding(.leading, 4)
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: size, weight: .medium))
+                .foregroundColor(disabled ? Theme.Palette.textTertiary : Theme.Palette.textSecondary)
+                .frame(width: 28, height: 28)
         }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .contentShape(Rectangle())
     }
 }
 
@@ -169,46 +168,61 @@ struct ProgressBar: View {
 
     var body: some View {
         GeometryReader { geo in
-            ZStack(alignment: .leading) {
+            VStack(spacing: Theme.Spacing.xs) {
                 // Track
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Color(hex: "#DADCE0"))
-                    .frame(height: 4)
+                ZStack(alignment: .leading) {
+                    // Background
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Theme.Palette.progressBar)
+                        .frame(height: 3)
 
-                // Progress
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Color(hex: "#1A73E8"))
-                    .frame(width: progressWidth(in: geo), height: 4)
+                    // Filled
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Theme.Palette.progressFill)
+                        .frame(
+                            width: progressWidth(in: geo),
+                            height: 3
+                        )
 
-                // Knob (show on hover/drag)
-                if isDragging || isHovering {
-                    Circle()
-                        .fill(Color(hex: "#1A73E8"))
-                        .frame(width: 12, height: 12)
-                        .offset(x: progressWidth(in: geo) - 6)
-                        .animation(.easeOut(duration: 0.1), value: isDragging)
+                    // Knob
+                    if isDragging || isHovering {
+                        Circle()
+                            .fill(Theme.Palette.progressFill)
+                            .frame(width: 12, height: 12)
+                            .offset(x: progressWidth(in: geo) - 6)
+                            .animation(Theme.Anim.fast, value: isDragging)
+                    }
+                }
+                .frame(height: 16)
+                .contentShape(Rectangle())
+                .onHover { isHovering = $0 }
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            isDragging = true
+                            let ratio = min(max(value.location.x / geo.size.width, 0), 1)
+                            dragValue = ratio * playerVM.duration
+                        }
+                        .onEnded { value in
+                            let ratio = min(max(value.location.x / geo.size.width, 0), 1)
+                            playerVM.seek(to: ratio * playerVM.duration)
+                            isDragging = false
+                        }
+                )
+
+                // Time labels
+                HStack {
+                    Text(formatTime(displayTime))
+                        .font(.system(size: Theme.FontSize.small, design: .monospaced))
+                        .foregroundColor(Theme.Palette.textTertiary)
+                    Spacer()
+                    Text(formatTime(displayDuration))
+                        .font(.system(size: Theme.FontSize.small, design: .monospaced))
+                        .foregroundColor(Theme.Palette.textTertiary)
                 }
             }
-            .frame(height: 20)
-            .contentShape(Rectangle())
-            .onHover { isHovering = $0 }
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { value in
-                        isDragging = true
-                        let ratio = min(max(value.location.x / geo.size.width, 0), 1)
-                        dragValue = ratio * playerVM.duration
-                    }
-                    .onEnded { value in
-                        let ratio = min(max(value.location.x / geo.size.width, 0), 1)
-                        playerVM.seek(to: ratio * playerVM.duration)
-                        isDragging = false
-                    }
-            )
         }
-        .frame(height: 20)
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
+        .frame(height: 36)
     }
 
     private func progressWidth(in geo: GeometryProxy) -> CGFloat {
@@ -216,37 +230,74 @@ struct ProgressBar: View {
         let ratio = displayTime / displayDuration
         return CGFloat(ratio) * geo.size.width
     }
+
+    private func formatTime(_ seconds: Double) -> String {
+        guard seconds.isFinite, seconds >= 0 else { return "0:00" }
+        let m = Int(seconds) / 60
+        let s = Int(seconds) % 60
+        return String(format: "%d:%02d", m, s)
+    }
 }
 
-// MARK: - Volume
+// MARK: - Volume Control
 
-struct VolumeView: View {
+struct VolumeControl: View {
     @EnvironmentObject var playerVM: PlayerViewModel
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: volumeIcon)
-                .font(.system(size: 12))
-                .foregroundColor(Color(hex: "#5F6368"))
-
-            Slider(value: Binding(
-                get: { playerVM.volume },
-                set: { playerVM.setVolume($0) }
-            ), in: 0...1)
-            .tint(Color(hex: "#1A73E8"))
-
-            Text("\(Int(playerVM.volume * 100))")
-                .font(.system(size: 10))
-                .foregroundColor(Color(hex: "#5F6368"))
-                .frame(width: 28, alignment: .trailing)
-        }
-    }
 
     var volumeIcon: String {
         if playerVM.volume == 0 { return "speaker.slash.fill" }
         if playerVM.volume < 0.33 { return "speaker.wave.1.fill" }
         if playerVM.volume < 0.66 { return "speaker.wave.2.fill" }
         return "speaker.wave.3.fill"
+    }
+
+    var body: some View {
+        HStack(spacing: Theme.Spacing.sm) {
+            Image(systemName: volumeIcon)
+                .font(.system(size: 12))
+                .foregroundColor(Theme.Palette.volumeIcon)
+
+            Slider(value: Binding(
+                get: { playerVM.volume },
+                set: { playerVM.setVolume($0) }
+            ), in: 0...1)
+            .tint(Theme.Palette.volumeFill)
+        }
+    }
+}
+
+// MARK: - Album Art
+
+struct AlbumArtView: View {
+    let url: String?
+    let size: CGFloat
+
+    var body: some View {
+        Group {
+            if let urlString = url, let u = URL(string: urlString) {
+                AsyncImage(url: u) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    PlaceholderView()
+                }
+            } else {
+                PlaceholderView()
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.xs))
+    }
+
+    private func PlaceholderView() -> some View {
+        RoundedRectangle(cornerRadius: Theme.Radius.xs)
+            .fill(Theme.Palette.bgTertiary)
+            .overlay(
+                Image(systemName: "music.note")
+                    .font(.system(size: size * 0.3))
+                    .foregroundColor(Theme.Palette.textTertiary)
+            )
     }
 }
 

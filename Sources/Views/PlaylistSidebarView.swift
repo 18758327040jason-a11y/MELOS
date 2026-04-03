@@ -1,67 +1,67 @@
 import SwiftUI
 
+// MARK: - Playlist Sidebar
+
 struct PlaylistSidebarView: View {
     @EnvironmentObject var playlistVM: PlaylistViewModel
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header
+            // Section header
             HStack {
                 Text("歌单")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Color(hex: "#5F6368"))
+                    .font(.system(size: Theme.FontSize.caption, weight: .semibold))
+                    .foregroundColor(Theme.Palette.textTertiary)
                     .textCase(.uppercase)
+                    .kerning(0.5)
                 Spacer()
+                Text("\(playlistVM.playlists.count)")
+                    .font(.system(size: Theme.FontSize.small, design: .monospaced))
+                    .foregroundColor(Theme.Palette.textTertiary)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-            .padding(.bottom, 8)
+            .padding(.horizontal, Theme.Spacing.lg)
+            .padding(.top, Theme.Spacing.xl)
+            .padding(.bottom, Theme.Spacing.md)
 
             if playlistVM.playlists.isEmpty {
-                EmptyPlaylistHint()
+                SidebarEmptyHint()
             } else {
                 ScrollView {
                     LazyVStack(spacing: 2) {
                         ForEach(playlistVM.playlists) { playlist in
-                            PlaylistRowView(playlist: playlist)
+                            PlaylistRow(playlist: playlist)
                         }
                     }
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, Theme.Spacing.sm)
                 }
             }
 
             Spacer()
         }
-        .background(Color(hex: "#F8F9FA"))
+        .background(Theme.Palette.bgSecondary)
     }
 }
 
-// MARK: - Empty Hint
+// MARK: - Sidebar Empty Hint
 
-struct EmptyPlaylistHint: View {
+struct SidebarEmptyHint: View {
     @EnvironmentObject var playlistVM: PlaylistViewModel
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Theme.Spacing.lg) {
             Spacer()
             Image(systemName: "music.note.list")
-                .font(.system(size: 36))
-                .foregroundColor(Color(hex: "#DADCE0"))
-            Text("还没有歌单")
-                .font(.system(size: 13))
-                .foregroundColor(Color(hex: "#9AA0A6"))
-            Text("点击右上角添加 QQ音乐 或\n网易云音乐歌单")
-                .font(.system(size: 11))
-                .foregroundColor(Color(hex: "#9AA0A6"))
-                .multilineTextAlignment(.center)
-                .lineSpacing(2)
+                .font(.system(size: 32))
+                .foregroundColor(Theme.Palette.textTertiary)
+            Text("无歌单")
+                .font(.system(size: Theme.FontSize.body))
+                .foregroundColor(Theme.Palette.textSecondary)
             Button(action: { playlistVM.showAddSheet = true }) {
-                Text("添加歌单")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Color(hex: "#1A73E8"))
+                Text("添加")
+                    .font(.system(size: Theme.FontSize.caption, weight: .medium))
+                    .foregroundColor(Theme.Palette.accent)
             }
             .buttonStyle(.plain)
-            .padding(.top, 4)
             Spacer()
         }
         .padding()
@@ -70,64 +70,67 @@ struct EmptyPlaylistHint: View {
 
 // MARK: - Playlist Row
 
-struct PlaylistRowView: View {
+struct PlaylistRow: View {
     @EnvironmentObject var playlistVM: PlaylistViewModel
     @EnvironmentObject var playerVM: PlayerViewModel
     let playlist: Playlist
+
+    @State private var isHovered = false
 
     var isSelected: Bool {
         playlistVM.selectedPlaylist?.id == playlist.id
     }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Theme.Spacing.md) {
             // Platform icon
             Image(systemName: playlist.platform.iconName)
-                .font(.system(size: 13))
+                .font(.system(size: 14))
                 .foregroundColor(Color(hex: playlist.platform.brandColor))
-                .frame(width: 20)
+                .frame(width: 24)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(playlist.name)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                    .foregroundColor(isSelected ? Color(hex: "#1A73E8") : Color(hex: "#202124"))
+                    .font(.system(size: Theme.FontSize.body, weight: isSelected ? .semibold : .regular))
+                    .foregroundColor(isSelected ? Theme.Palette.accent : Theme.Palette.textPrimary)
                     .lineLimit(1)
 
                 Text("\(playlist.songCount) 首")
-                    .font(.system(size: 11))
-                    .foregroundColor(Color(hex: "#9AA0A6"))
+                    .font(.system(size: Theme.FontSize.small))
+                    .foregroundColor(Theme.Palette.textTertiary)
             }
 
             Spacer()
 
             // Playing indicator
-            if playerVM.currentSong != nil && playerVM.currentPlaylist.firstIndex(of: playerVM.currentSong!) != nil {
+            if playerVM.currentSong != nil && playerVM.currentPlaylist.contains(where: { $0.id == playerVM.currentSong?.id }) {
                 Circle()
-                    .fill(Color(hex: "#1A73E8"))
+                    .fill(Theme.Palette.accent)
                     .frame(width: 6, height: 6)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, Theme.Spacing.md)
+        .padding(.vertical, Theme.Spacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isSelected ? Color(hex: "#E8F0FE") : Color.clear)
+            RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                .fill(
+                    isSelected
+                        ? Theme.Palette.accentLight.opacity(0.2)
+                        : (isHovered ? Theme.Palette.hover : Color.clear)
+                )
         )
         .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
         .onTapGesture {
             playlistVM.selectPlaylist(playlist)
         }
         .contextMenu {
-            Button("刷新歌单") {
-                Task {
-                    await playlistVM.refreshPlaylist(playlist)
-                }
+            Button("刷新") {
+                Task { await playlistVM.refreshPlaylist(playlist) }
             }
             Divider()
-            Button("删除歌单", role: .destructive) {
-                Task {
-                    await playlistVM.deletePlaylist(playlist)
-                }
+            Button("删除", role: .destructive) {
+                Task { await playlistVM.deletePlaylist(playlist) }
             }
         }
     }

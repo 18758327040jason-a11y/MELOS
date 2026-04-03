@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		25C8BAA380D671103224A973 /* AddPlatformSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C736B0D0A80757A8CB5CACF1 /* AddPlatformSheet.swift */; };
 		4FBC4E871B2867490C1054AA /* SongListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC82C50A8BBF1A706529AF8B /* SongListView.swift */; };
+		58BBD5949D0A13707D9DEEE5 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1434F7FBE9A9639511496717 /* Theme.swift */; };
 		651C5EADBBA98FFA8F08D300 /* DatabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4C8B382FFE8CB911FEEC7B7 /* DatabaseService.swift */; };
 		77048FD0003FD992E15DBF45 /* Playlist.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA4E6D692AEE0AF1AB256F4D /* Playlist.swift */; };
 		77064C6DCBEFDD6FF5E745D6 /* PlayerBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1AA514B32B7965230266D42C /* PlayerBarView.swift */; };
@@ -26,6 +27,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		1434F7FBE9A9639511496717 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		182750BE10F8B8D8370C6AE1 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		1AA514B32B7965230266D42C /* PlayerBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerBarView.swift; sourceTree = "<group>"; };
 		20F6A7B7D266D43D0FAF6B37 /* PlayerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerViewModel.swift; sourceTree = "<group>"; };
@@ -105,6 +107,14 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		2C51922966AE0A5FA74C4D0C /* Design */ = {
+			isa = PBXGroup;
+			children = (
+				1434F7FBE9A9639511496717 /* Theme.swift */,
+			);
+			path = Design;
+			sourceTree = "<group>";
+		};
 		2EA38518A5E456F39A12DB6F /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
@@ -135,6 +145,7 @@
 				6CBB14B543489BB518776DBD /* AppDelegate.swift */,
 				FE8C89F912469880CAB46F2D /* Info.plist */,
 				182750BE10F8B8D8370C6AE1 /* main.swift */,
+				2C51922966AE0A5FA74C4D0C /* Design */,
 				188A78B36E0F37A55DD344E0 /* Models */,
 				0EF2A46C9C6090E3EE25A618 /* Resources */,
 				137FD14A9B7799A6B1DDF42C /* Services */,
@@ -222,6 +233,7 @@
 				950032E5EA1881E3B09C32E4 /* PlaylistViewModel.swift in Sources */,
 				AB7969CABC7089DE30DFF50C /* Song.swift in Sources */,
 				4FBC4E871B2867490C1054AA /* SongListView.swift in Sources */,
+				58BBD5949D0A13707D9DEEE5 /* Theme.swift in Sources */,
 				D931CC22D9F11A3C5813A65B /* main.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -290,7 +302,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -369,7 +381,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;

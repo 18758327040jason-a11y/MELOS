@@ -1,5 +1,7 @@
 import SwiftUI
 
+// MARK: - Song List View
+
 struct SongListView: View {
     @EnvironmentObject var playlistVM: PlaylistViewModel
     @EnvironmentObject var playerVM: PlayerViewModel
@@ -7,92 +9,140 @@ struct SongListView: View {
     var body: some View {
         VStack(spacing: 0) {
             if let playlist = playlistVM.selectedPlaylist {
-                // Playlist header
-                PlaylistHeaderView(playlist: playlist)
+                // Header
+                PlaylistHeader(playlist: playlist)
 
                 Divider()
 
                 // Song list
                 if playlistVM.filteredSongs.isEmpty {
-                    EmptySongListView()
+                    SongListEmptyState()
                 } else {
-                    SongTableView(songs: playlistVM.filteredSongs)
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(spacing: 0) {
+                                // Table header
+                                SongTableHeader()
+
+                                Divider()
+                                    .padding(.horizontal, Theme.Spacing.xl)
+
+                                // Songs
+                                ForEach(Array(playlistVM.filteredSongs.enumerated()), id: \.element.id) { index, song in
+                                    SongRow(song: song, index: index + 1)
+                                        .id(song.id)
+                                }
+                            }
+                            .padding(.bottom, Theme.Spacing.md)
+                        }
+                        .onChange(of: playerVM.currentSong?.id) { oldId, newId in
+                            if let id = newId {
+                                withAnimation(Theme.Anim.medium) {
+                                    proxy.scrollTo(id, anchor: .center)
+                                }
+                            }
+                        }
+                    }
                 }
             } else {
-                NoPlaylistSelectedView()
+                EmptyStateView()
             }
         }
-        .background(Color(hex: "#FFFFFF"))
+        .background(Theme.Palette.bgPrimary)
     }
 }
 
 // MARK: - Playlist Header
 
-struct PlaylistHeaderView: View {
+struct PlaylistHeader: View {
     @EnvironmentObject var playlistVM: PlaylistViewModel
     let playlist: Playlist
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: 16) {
-                // Cover
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(hex: "#E8F0FE"))
-                    .frame(width: 120, height: 120)
-                    .overlay(
-                        Image(systemName: "music.note.list")
-                            .font(.system(size: 40))
-                            .foregroundColor(Color(hex: "#1A73E8"))
-                    )
+        VStack(spacing: Theme.Spacing.lg) {
+            HStack(alignment: .top, spacing: Theme.Spacing.xl) {
+                // Large album art (placeholder style)
+                ZStack {
+                    RoundedRectangle(cornerRadius: Theme.Radius.lg)
+                        .fill(Theme.Palette.accentLight.opacity(0.2))
+                        .frame(width: 130, height: 130)
 
-                VStack(alignment: .leading, spacing: 8) {
+                    Image(systemName: "music.note.list")
+                        .font(.system(size: 40))
+                        .foregroundColor(Theme.Palette.accent.opacity(0.5))
+                }
+
+                VStack(alignment: .leading, spacing: Theme.Spacing.md) {
                     // Platform badge
-                    HStack(spacing: 4) {
+                    HStack(spacing: Theme.Spacing.xs) {
                         Circle()
                             .fill(Color(hex: playlist.platform.brandColor))
                             .frame(width: 8, height: 8)
                         Text(playlist.platform.rawValue)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(Color(hex: "#5F6368"))
+                            .font(.system(size: Theme.FontSize.caption, weight: .medium))
+                            .foregroundColor(Theme.Palette.textSecondary)
                     }
 
                     Text(playlist.name)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(Color(hex: "#202124"))
+                        .font(.system(size: Theme.FontSize.title, weight: .bold))
+                        .foregroundColor(Theme.Palette.textPrimary)
                         .lineLimit(2)
 
                     Text("\(playlist.songCount) 首歌曲")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color(hex: "#5F6368"))
+                        .font(.system(size: Theme.FontSize.body))
+                        .foregroundColor(Theme.Palette.textSecondary)
 
                     if let lastSync = playlist.lastSyncTime {
-                        Text("上次同步: \(lastSync.formatted(.relative(presentation: .named)))")
-                            .font(.system(size: 11))
-                            .foregroundColor(Color(hex: "#9AA0A6"))
+                        Text("同步于 \(lastSync.formatted(.relative(presentation: .named)))")
+                            .font(.system(size: Theme.FontSize.small))
+                            .foregroundColor(Theme.Palette.textTertiary)
                     }
 
-                    HStack(spacing: 10) {
-                        Button(action: {
-                            Task {
-                                await playlistVM.refreshPlaylist(playlist)
+                    HStack(spacing: Theme.Spacing.sm) {
+                        // Play all button
+                        if !playlist.songs.isEmpty {
+                            Button(action: {
+                                playerVM.play(song: playlist.songs[0], in: playlist.songs)
+                            }) {
+                                HStack(spacing: Theme.Spacing.xs) {
+                                    Image(systemName: "play.fill")
+                                        .font(.system(size: 13))
+                                    Text("播放全部")
+                                        .font(.system(size: Theme.FontSize.body, weight: .medium))
+                                }
+                                .foregroundColor(.white)
+                                .padding(.horizontal, Theme.Spacing.lg)
+                                .padding(.vertical, Theme.Spacing.sm)
+                                .background(
+                                    Capsule()
+                                        .fill(Theme.Palette.accent)
+                                )
                             }
+                            .buttonStyle(.plain)
+                        }
+
+                        // Sync button
+                        Button(action: {
+                            Task { await playlistVM.refreshPlaylist(playlist) }
                         }) {
-                            HStack(spacing: 4) {
+                            HStack(spacing: Theme.Spacing.xs) {
                                 if playlistVM.isLoading {
                                     ProgressView()
                                         .scaleEffect(0.6)
                                 } else {
                                     Image(systemName: "arrow.clockwise")
-                                        .font(.system(size: 11))
+                                        .font(.system(size: 13))
                                 }
                                 Text("同步")
-                                    .font(.system(size: 12, weight: .medium))
+                                    .font(.system(size: Theme.FontSize.body, weight: .medium))
                             }
-                            .foregroundColor(Color(hex: "#1A73E8"))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 6)
-                            .background(Color(hex: "#E8F0FE"))
-                            .cornerRadius(16)
+                            .foregroundColor(Theme.Palette.accent)
+                            .padding(.horizontal, Theme.Spacing.lg)
+                            .padding(.vertical, Theme.Spacing.sm)
+                            .background(
+                                Capsule()
+                                    .stroke(Theme.Palette.accent.opacity(0.3), lineWidth: 1)
+                            )
                         }
                         .buttonStyle(.plain)
                     }
@@ -100,74 +150,69 @@ struct PlaylistHeaderView: View {
 
                 Spacer()
             }
-            .padding(20)
+            .padding(Theme.Spacing.xl)
 
-            // Search
-            HStack {
+            // Search bar
+            HStack(spacing: Theme.Spacing.sm) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 12))
-                    .foregroundColor(Color(hex: "#9AA0A6"))
-                TextField("在歌单内搜索...", text: $playlistVM.searchText)
-                    .font(.system(size: 13))
+                    .font(.system(size: Theme.FontSize.caption))
+                    .foregroundColor(Theme.Palette.textTertiary)
+                TextField("搜索歌曲、艺术家...", text: $playlistVM.searchText)
+                    .font(.system(size: Theme.FontSize.body))
                     .textFieldStyle(.plain)
+                if !playlistVM.searchText.isEmpty {
+                    Button(action: { playlistVM.searchText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: Theme.FontSize.body))
+                            .foregroundColor(Theme.Palette.textTertiary)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(Color(hex: "#F1F3F4"))
-            .cornerRadius(8)
-            .padding(.horizontal, 20)
-            .padding(.bottom, 12)
+            .padding(.horizontal, Theme.Spacing.lg)
+            .padding(.vertical, Theme.Spacing.md)
+            .background(
+                RoundedRectangle(cornerRadius: Theme.Radius.md)
+                    .fill(Theme.Palette.bgTertiary)
+            )
+            .padding(.horizontal, Theme.Spacing.xl)
+            .padding(.bottom, Theme.Spacing.md)
         }
     }
+
+    private var playerVM: PlayerViewModel { .shared }
 }
 
-// MARK: - Song Table
+// MARK: - Table Header
 
-struct SongTableView: View {
-    @EnvironmentObject var playerVM: PlayerViewModel
-    let songs: [Song]
-
+struct SongTableHeader: View {
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: 0) {
-                // Table header
-                HStack(spacing: 0) {
-                    Text("#")
-                        .frame(width: 40, alignment: .leading)
-                    Text("标题")
-                    Spacer()
-                    Text("艺术家")
-                        .frame(width: 140, alignment: .leading)
-                    Text("时长")
-                        .frame(width: 60, alignment: .trailing)
-                }
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(Color(hex: "#9AA0A6"))
-                .padding(.horizontal, 20)
-                .padding(.vertical, 8)
-                .background(Color(hex: "#FAFAFA"))
-
-                Divider()
-
-                ForEach(Array(songs.enumerated()), id: \.element.id) { index, song in
-                    SongRowView(song: song, index: index + 1)
-                    if index < songs.count - 1 {
-                        Divider()
-                            .padding(.horizontal, 20)
-                    }
-                }
-            }
+        HStack(spacing: 0) {
+            Text("#")
+                .frame(width: 36, alignment: .leading)
+            Text("歌曲")
+            Spacer()
+            Text("艺术家")
+                .frame(width: 160, alignment: .leading)
+            Text("时长")
+                .frame(width: 60, alignment: .trailing)
         }
+        .font(.system(size: Theme.FontSize.small, weight: .medium))
+        .foregroundColor(Theme.Palette.textTertiary)
+        .padding(.horizontal, Theme.Spacing.xl)
+        .padding(.vertical, Theme.Spacing.md)
     }
 }
 
 // MARK: - Song Row
 
-struct SongRowView: View {
+struct SongRow: View {
     @EnvironmentObject var playerVM: PlayerViewModel
     @EnvironmentObject var playlistVM: PlaylistViewModel
     let song: Song
     let index: Int
+
+    @State private var isHovered = false
 
     var isCurrentSong: Bool {
         playerVM.currentSong?.id == song.id
@@ -175,91 +220,76 @@ struct SongRowView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Index or playing indicator
+            // Index
             ZStack {
                 Text("\(index)")
-                    .font(.system(size: 13))
-                    .foregroundColor(isCurrentSong ? Color(hex: "#1A73E8") : Color(hex: "#9AA0A6"))
+                    .font(.system(size: Theme.FontSize.body, design: .monospaced))
+                    .foregroundColor(Theme.Palette.textTertiary)
             }
-            .frame(width: 40, alignment: .leading)
+            .frame(width: 36, alignment: .leading)
+
+            // Album art
+            AlbumArtView(url: song.coverUrl, size: 40)
+                .padding(.trailing, Theme.Spacing.md)
 
             // Title + artist
             VStack(alignment: .leading, spacing: 2) {
                 Text(song.title)
-                    .font(.system(size: 13, weight: isCurrentSong ? .semibold : .medium))
-                    .foregroundColor(isCurrentSong ? Color(hex: "#1A73E8") : Color(hex: "#202124"))
+                    .font(.system(size: Theme.FontSize.body, weight: isCurrentSong ? .semibold : .medium))
+                    .foregroundColor(isCurrentSong ? Theme.Palette.accent : Theme.Palette.textPrimary)
                     .lineLimit(1)
                 Text(song.artist)
-                    .font(.system(size: 11))
-                    .foregroundColor(Color(hex: "#9AA0A6"))
+                    .font(.system(size: Theme.FontSize.small))
+                    .foregroundColor(isCurrentSong ? Theme.Palette.accent : Theme.Palette.textTertiary)
                     .lineLimit(1)
             }
 
             Spacer()
 
-            // Artist (if truncated from title)
+            // Artist (desktop view)
             Text(song.artist)
-                .font(.system(size: 12))
-                .foregroundColor(Color(hex: "#5F6368"))
+                .font(.system(size: Theme.FontSize.caption))
+                .foregroundColor(Theme.Palette.textSecondary)
                 .lineLimit(1)
-                .frame(width: 140, alignment: .leading)
+                .frame(width: 160, alignment: .leading)
 
             // Duration
             Text(song.formattedDuration)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(Color(hex: "#9AA0A6"))
+                .font(.system(size: Theme.FontSize.caption, design: .monospaced))
+                .foregroundColor(Theme.Palette.textTertiary)
                 .frame(width: 60, alignment: .trailing)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 8)
-        .background(isCurrentSong ? Color(hex: "#E8F0FE").opacity(0.4) : Color.clear)
+        .padding(.horizontal, Theme.Spacing.xl)
+        .padding(.vertical, Theme.Spacing.sm)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.sm)
+                .fill(isCurrentSong ? Theme.Palette.accentLight.opacity(0.15) : (isHovered ? Theme.Palette.hover : Color.clear))
+                .padding(.horizontal, Theme.Spacing.md)
+        )
         .contentShape(Rectangle())
+        .onHover { isHovered = $0 }
         .onTapGesture {
             if let playlist = playlistVM.selectedPlaylist {
                 playerVM.play(song: song, in: playlist.songs)
             }
-        }
-        .onHover { hovering in
-            // Simple hover effect via background
         }
     }
 }
 
 // MARK: - Empty States
 
-struct EmptySongListView: View {
-    @EnvironmentObject var playlistVM: PlaylistViewModel
-
+struct SongListEmptyState: View {
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Theme.Spacing.lg) {
             Spacer()
             Image(systemName: "music.note")
                 .font(.system(size: 40))
-                .foregroundColor(Color(hex: "#DADCE0"))
-            Text(playlistVM.searchText.isEmpty ? "歌单为空" : "未找到相关歌曲")
-                .font(.system(size: 14))
-                .foregroundColor(Color(hex: "#9AA0A6"))
-            if !playlistVM.searchText.isEmpty {
-                Text("试试其他关键词")
-                    .font(.system(size: 12))
-                    .foregroundColor(Color(hex: "#DADCE0"))
-            }
+                .foregroundColor(Theme.Palette.textTertiary)
+            Text("歌单为空")
+                .font(.system(size: Theme.FontSize.body))
+                .foregroundColor(Theme.Palette.textSecondary)
             Spacer()
         }
-    }
-}
-
-struct NoPlaylistSelectedView: View {
-    var body: some View {
-        VStack(spacing: 12) {
-            Spacer()
-            Image(systemName: "hand.point.left")
-                .font(.system(size: 40))
-                .foregroundColor(Color(hex: "#DADCE0"))
-            Text("从左侧选择一个歌单")
-                .font(.system(size: 14))
-                .foregroundColor(Color(hex: "#9AA0A6"))
-            Spacer()
-        }
+        .frame(maxWidth: .infinity)
     }
 }
