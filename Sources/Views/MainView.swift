@@ -41,10 +41,6 @@ struct MainView: View {
         .task {
             await playlistVM.loadPlaylists()
         }
-        .onKeyPress(.space) {
-            playerVM.togglePlayPause()
-            return .handled
-        }
     }
 }
 
