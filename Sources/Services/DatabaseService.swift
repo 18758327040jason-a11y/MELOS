@@ -9,7 +9,6 @@ actor DatabaseService {
     // Tables
     private let playlists = Table("playlists")
     private let songs = Table("songs")
-    private let history = Table("history")
 
     // Playlist columns
     private let pId = SQLite.Expression<String>("id")
@@ -28,19 +27,6 @@ actor DatabaseService {
     private let sPlayUrl = SQLite.Expression<String?>("play_url")
     private let sCoverUrl = SQLite.Expression<String?>("cover_url")
     private let sPlaylistId = SQLite.Expression<String>("playlist_id")
-    private let sIsFavorite = SQLite.Expression<Bool>("is_favorite")
-
-    // History columns
-    private let hId = SQLite.Expression<String>("id")
-    private let hSongId = SQLite.Expression<String>("song_id")
-    private let hPlatform = SQLite.Expression<String>("platform")
-    private let hTitle = SQLite.Expression<String>("title")
-    private let hArtist = SQLite.Expression<String>("artist")
-    private let hAlbum = SQLite.Expression<String?>("album")
-    private let hDuration = SQLite.Expression<Int>("duration")
-    private let hPlayUrl = SQLite.Expression<String?>("play_url")
-    private let hCoverUrl = SQLite.Expression<String?>("cover_url")
-    private let hPlayedAt = SQLite.Expression<Double>("played_at")
 
     private init() {}
 
@@ -51,7 +37,6 @@ actor DatabaseService {
             let dbPath = path.appendingPathComponent("MusicPlayer.sqlite").path
             db = try Connection(dbPath)
             try createTables()
-            try migrateAddIsFavorite()
         } catch {
             print("Database init error: \(error)")
         }
@@ -76,35 +61,7 @@ actor DatabaseService {
             t.column(sPlayUrl)
             t.column(sCoverUrl)
             t.column(sPlaylistId)
-            t.column(sIsFavorite, defaultValue: false)
         })
-
-        try db?.run(history.create(ifNotExists: true) { t in
-            t.column(hId, primaryKey: true)
-            t.column(hSongId)
-            t.column(hPlatform)
-            t.column(hTitle)
-            t.column(hArtist)
-            t.column(hAlbum)
-            t.column(hDuration)
-            t.column(hPlayUrl)
-            t.column(hCoverUrl)
-            t.column(hPlayedAt)
-        })
-    }
-
-    private func migrateAddIsFavorite() throws {
-        guard let db = db else { return }
-        let stmt = try db.prepare("PRAGMA table_info(songs)")
-        var columnNames: [String] = []
-        for row in stmt {
-            if let name = row[1] as? String {
-                columnNames.append(name)
-            }
-        }
-        if !columnNames.contains("is_favorite") {
-            try db.run("ALTER TABLE songs ADD COLUMN is_favorite INTEGER DEFAULT 0")
-        }
     }
 
     // MARK: - Playlist CRUD
@@ -167,8 +124,7 @@ actor DatabaseService {
             sDuration <- song.duration,
             sPlayUrl <- song.playUrl,
             sCoverUrl <- song.coverUrl,
-            sPlaylistId <- playlistId,
-            sIsFavorite <- song.isFavorite
+            sPlaylistId <- playlistId
         )
         try db?.run(insert)
     }
@@ -188,77 +144,7 @@ actor DatabaseService {
                 album: row[sAlbum],
                 duration: row[sDuration],
                 playUrl: row[sPlayUrl],
-                coverUrl: row[sCoverUrl],
-                isFavorite: row[sIsFavorite]
-            )
-            result.append(song)
-        }
-        return result
-    }
-
-    // MARK: - Favorites
-
-    func toggleFavorite(songId: String) async throws -> Bool {
-        guard let db = db else { return false }
-        let songRow = songs.filter(sId == songId)
-        if let row = try db.pluck(songRow) {
-            let current = row[sIsFavorite]
-            try db.run(songRow.update(sIsFavorite <- !current))
-            return !current
-        }
-        return false
-    }
-
-    func loadFavorites() async throws -> [Song] {
-        guard let db = db else { return [] }
-        var result: [Song] = []
-        let q = songs.filter(sIsFavorite == true)
-        for row in try db.prepare(q) {
-            let platform = Platform(rawValue: row[sPlatform]) ?? .qq
-            let song = Song(
-                id: row[sId], platform: platform,
-                title: row[sTitle], artist: row[sArtist],
-                album: row[sAlbum], duration: row[sDuration],
-                playUrl: row[sPlayUrl], coverUrl: row[sCoverUrl],
-                isFavorite: true
-            )
-            result.append(song)
-        }
-        return result
-    }
-
-    // MARK: - History
-
-    func addToHistory(_ song: Song) async throws {
-        let id = UUID().uuidString
-        let insert = history.insert(
-            hId <- id,
-            hSongId <- song.id,
-            hPlatform <- song.platform.rawValue,
-            hTitle <- song.title,
-            hArtist <- song.artist,
-            hAlbum <- song.album,
-            hDuration <- song.duration,
-            hPlayUrl <- song.playUrl,
-            hCoverUrl <- song.coverUrl,
-            hPlayedAt <- Date().timeIntervalSince1970
-        )
-        try db?.run(insert)
-        // Keep last 200 entries
-        try db?.run("DELETE FROM history WHERE id NOT IN (SELECT id FROM history ORDER BY played_at DESC LIMIT 200)")
-    }
-
-    func loadHistory(limit: Int = 100) async throws -> [Song] {
-        guard let db = db else { return [] }
-        var result: [Song] = []
-        let q = history.order(hPlayedAt.desc).limit(limit)
-        for row in try db.prepare(q) {
-            let platform = Platform(rawValue: row[hPlatform]) ?? .qq
-            let song = Song(
-                id: row[hSongId], platform: platform,
-                title: row[hTitle], artist: row[hArtist],
-                album: row[hAlbum], duration: row[hDuration],
-                playUrl: row[hPlayUrl], coverUrl: row[hCoverUrl]
+                coverUrl: row[sCoverUrl]
             )
             result.append(song)
         }

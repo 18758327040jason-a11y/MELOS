@@ -10,11 +10,10 @@ struct SongListView: View {
     var body: some View {
         VStack(spacing: 0) {
             if let playlist = playlistVM.selectedPlaylist {
+                // Header fixed at top (NOT inside ScrollView)
                 PlaylistHeader(playlist: playlist)
 
-                Divider()
-                    .background(tc.divider)
-
+                // Songs list — ScrollView fills remaining space
                 if playlistVM.filteredSongs.isEmpty {
                     SongListEmptyState()
                 } else {
@@ -22,14 +21,11 @@ struct SongListView: View {
                         ScrollView {
                             LazyVStack(spacing: 0) {
                                 SongTableHeader()
-                                Divider()
-                                    .padding(.horizontal, Theme.Spacing.xl)
                                 ForEach(Array(playlistVM.filteredSongs.enumerated()), id: \.element.id) { index, song in
                                     SongRow(song: song, index: index + 1)
                                         .id(song.id)
                                 }
                             }
-                            .padding(.bottom, Theme.Spacing.md)
                         }
                         .onChange(of: playerVM.currentSong?.id) { _, newId in
                             if let id = newId {
@@ -56,116 +52,99 @@ struct PlaylistHeader: View {
     let playlist: Playlist
 
     var body: some View {
-        VStack(spacing: Theme.Spacing.lg) {
-            HStack(alignment: .top, spacing: Theme.Spacing.xl) {
-                // Large album art
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: Theme.Spacing.lg) {
+                // Album art (small, left)
                 ZStack {
-                    RoundedRectangle(cornerRadius: Theme.Radius.lg)
+                    RoundedRectangle(cornerRadius: Theme.Radius.md)
                         .fill(tc.accentLight.opacity(0.2))
-                        .frame(width: 130, height: 130)
+                        .frame(width: 64, height: 64)
 
                     Image(systemName: "music.note.list")
-                        .font(.system(size: 40))
+                        .font(.system(size: 24))
                         .foregroundColor(tc.accent.opacity(0.5))
                 }
 
-                VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+                // Info (fill remaining space)
+                VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: Theme.Spacing.xs) {
                         Circle()
                             .fill(Color(hex: playlist.platform.brandColor))
-                            .frame(width: 8, height: 8)
+                            .frame(width: 7, height: 7)
                         Text(playlist.platform.rawValue)
-                            .font(.system(size: Theme.FontSize.caption, weight: .medium))
+                            .font(.system(size: Theme.FontSize.small))
                             .foregroundColor(tc.textSecondary)
                     }
 
                     Text(playlist.name)
-                        .font(.system(size: Theme.FontSize.title, weight: .bold))
+                        .font(.system(size: Theme.FontSize.heading, weight: .bold))
                         .foregroundColor(tc.textPrimary)
-                        .lineLimit(2)
-
-                    Text("\(playlist.songCount) 首歌曲")
-                        .font(.system(size: Theme.FontSize.body))
-                        .foregroundColor(tc.textSecondary)
-
-                    if let lastSync = playlist.lastSyncTime {
-                        Text("同步于 \(lastSync.formatted(.relative(presentation: .named)))")
-                            .font(.system(size: Theme.FontSize.small))
-                            .foregroundColor(tc.textTertiary)
-                    }
+                        .lineLimit(1)
 
                     HStack(spacing: Theme.Spacing.sm) {
-                        if !playlist.songs.isEmpty {
-                            Button(action: {
-                                playerVM.selectSong(playlist.songs[0], in: playlist.songs)
-                                playerVM.startPlayback()
-                            }) {
-                                HStack(spacing: Theme.Spacing.xs) {
-                                    Image(systemName: "play.fill")
-                                        .font(.system(size: 13))
-                                    Text("播放全部")
-                                        .font(.system(size: Theme.FontSize.body, weight: .medium))
-                                }
-                                .foregroundColor(.white)
-                                .padding(.horizontal, Theme.Spacing.lg)
-                                .padding(.vertical, Theme.Spacing.sm)
-                                .background(Capsule().fill(tc.accent))
-                            }
-                            .buttonStyle(.plain)
-                        }
+                        Text("\(playlist.songCount) 首歌曲")
+                            .font(.system(size: Theme.FontSize.small))
+                            .foregroundColor(tc.textSecondary)
 
-                        Button(action: {
-                            Task { await playlistVM.refreshPlaylist(playlist) }
-                        }) {
-                            HStack(spacing: Theme.Spacing.xs) {
-                                if playlistVM.isLoading {
-                                    ProgressView().scaleEffect(0.6)
-                                } else {
-                                    Image(systemName: "arrow.clockwise")
-                                        .font(.system(size: 13))
-                                }
-                                Text("同步")
-                                    .font(.system(size: Theme.FontSize.body, weight: .medium))
-                            }
-                            .foregroundColor(tc.accent)
-                            .padding(.horizontal, Theme.Spacing.lg)
-                            .padding(.vertical, Theme.Spacing.sm)
-                            .background(Capsule().stroke(tc.accent.opacity(0.3), lineWidth: 1))
+                        if let lastSync = playlist.lastSyncTime {
+                            Text("·")
+                                .foregroundColor(tc.textTertiary)
+                            Text("同步于 \(lastSync.formatted(.relative(presentation: .named)))")
+                                .font(.system(size: Theme.FontSize.small))
+                                .foregroundColor(tc.textTertiary)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
 
                 Spacer()
-            }
-            .padding(Theme.Spacing.xl)
 
-            // Search bar
-            HStack(spacing: Theme.Spacing.sm) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: Theme.FontSize.caption))
-                    .foregroundColor(tc.textTertiary)
-                TextField("搜索歌曲、艺术家...", text: $playlistVM.searchText)
-                    .font(.system(size: Theme.FontSize.body))
-                    .textFieldStyle(.plain)
-                if !playlistVM.searchText.isEmpty {
-                    Button(action: { playlistVM.searchText = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: Theme.FontSize.body))
-                            .foregroundColor(tc.textTertiary)
+                // Buttons (right side)
+                HStack(spacing: Theme.Spacing.sm) {
+                    if !playlist.songs.isEmpty {
+                        Button(action: {
+                            PlayerViewModel.shared.selectSong(playlist.songs[0], in: playlist.songs)
+                            PlayerViewModel.shared.startPlayback()
+                        }) {
+                            HStack(spacing: Theme.Spacing.xs) {
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: 12))
+                                Text("播放全部")
+                                    .font(.system(size: Theme.FontSize.body, weight: .medium))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, Theme.Spacing.lg)
+                            .padding(.vertical, Theme.Spacing.sm)
+                            .background(Capsule().fill(tc.accent))
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Button(action: {
+                        Task { await playlistVM.refreshPlaylist(playlist) }
+                    }) {
+                        HStack(spacing: Theme.Spacing.xs) {
+                            if playlistVM.isLoading {
+                                ProgressView().scaleEffect(0.6)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 12))
+                            }
+                            Text("同步")
+                                .font(.system(size: Theme.FontSize.body, weight: .medium))
+                        }
+                        .foregroundColor(tc.accent)
+                        .padding(.horizontal, Theme.Spacing.lg)
+                        .padding(.vertical, Theme.Spacing.sm)
+                        .background(Capsule().stroke(tc.accent.opacity(0.3), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
                 }
             }
             .padding(.horizontal, Theme.Spacing.lg)
             .padding(.vertical, Theme.Spacing.md)
-            .background(RoundedRectangle(cornerRadius: Theme.Radius.md).fill(tc.bgTertiary))
-            .padding(.horizontal, Theme.Spacing.xl)
-            .padding(.bottom, Theme.Spacing.md)
         }
     }
 
-    private var playerVM: PlayerViewModel { .shared }
 }
 
 // MARK: - Table Header

@@ -1,6 +1,5 @@
 import SwiftUI
 import Combine
-import MediaPlayer
 
 enum PlayMode: String, CaseIterable {
     case sequential = "顺序播放"
@@ -36,14 +35,12 @@ enum PlaybackState: Equatable {
 enum RightPanelType: String, CaseIterable {
     case lyrics = "歌词"
     case queue = "播放列表"
-    case history = "历史"
     case none = ""
 
     var icon: String {
         switch self {
         case .lyrics: return "quote.bubble"
         case .queue: return "list.bullet"
-        case .history: return "clock"
         case .none: return ""
         }
     }
@@ -113,8 +110,6 @@ class PlayerViewModel: ObservableObject {
             Task { @MainActor in
                 if success {
                     self?.playbackState = .playing
-                    self?.updateNowPlaying()
-                    self?.addToHistory(song)
                 } else {
                     self?.playbackError = errorMessage ?? "无法播放该歌曲"
                     self?.playbackState = .failed
@@ -127,7 +122,6 @@ class PlayerViewModel: ObservableObject {
         if playbackState == .playing {
             audioService.pause()
             playbackState = .ready
-            updateNowPlaying()
         } else if playbackState == .ready {
             startPlayback()
         }
@@ -148,8 +142,6 @@ class PlayerViewModel: ObservableObject {
             Task { @MainActor in
                 if success {
                     self?.playbackState = .playing
-                    self?.updateNowPlaying()
-                    self?.addToHistory(song)
                 } else {
                     self?.playbackError = errorMessage ?? "无法播放该歌曲"
                     self?.playbackState = .failed
@@ -195,7 +187,6 @@ class PlayerViewModel: ObservableObject {
         playbackState = .idle
         playbackError = nil
         audioService.stop()
-        clearNowPlaying()
     }
 
     func seek(to seconds: Double) { audioService.seek(to: seconds) }
@@ -216,86 +207,5 @@ class PlayerViewModel: ObservableObject {
         if playbackState == .failed {
             playbackState = selectedSong != nil ? .ready : .idle
         }
-    }
-
-    // MARK: - Favorites
-
-    func toggleFavorite() {
-        guard let song = currentSong ?? selectedSong else { return }
-        Task {
-            let newState = try? await DatabaseService.shared.toggleFavorite(songId: song.id)
-            if newState == true {
-                self.currentSong?.isFavorite = true
-                self.selectedSong?.isFavorite = true
-            } else if newState == false {
-                self.currentSong?.isFavorite = false
-                self.selectedSong?.isFavorite = false
-            }
-        }
-    }
-
-    // MARK: - History
-
-    private func addToHistory(_ song: Song) {
-        Task {
-            try? await DatabaseService.shared.addToHistory(song)
-        }
-    }
-
-    // MARK: - System Media Controls (Now Playing)
-
-    private func updateNowPlaying() {
-        guard let song = currentSong else { return }
-        var info: [String: Any] = [
-            MPMediaItemPropertyTitle: song.title,
-            MPMediaItemPropertyArtist: song.artist,
-            MPMediaItemPropertyPlaybackDuration: Double(song.duration),
-            MPNowPlayingInfoPropertyElapsedPlaybackTime: currentTime,
-            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0
-        ]
-        if let album = song.album {
-            info[MPMediaItemPropertyAlbumTitle] = album
-        }
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-
-        // Register remote commands
-        let cmdCenter = MPRemoteCommandCenter.shared()
-        cmdCenter.playCommand.isEnabled = true
-        cmdCenter.pauseCommand.isEnabled = true
-        cmdCenter.nextTrackCommand.isEnabled = !currentPlaylist.isEmpty
-        cmdCenter.previousTrackCommand.isEnabled = !currentPlaylist.isEmpty
-        cmdCenter.playCommand.addTarget { [weak self] _ in
-            Task { @MainActor in self?.togglePlayPause() }
-            return .success
-        }
-        cmdCenter.pauseCommand.addTarget { [weak self] _ in
-            Task { @MainActor in self?.togglePlayPause() }
-            return .success
-        }
-        cmdCenter.nextTrackCommand.addTarget { [weak self] _ in
-            Task { @MainActor in self?.playNext() }
-            return .success
-        }
-        cmdCenter.previousTrackCommand.addTarget { [weak self] _ in
-            Task { @MainActor in self?.playPrevious() }
-            return .success
-        }
-
-        // Load artwork
-        if let urlStr = song.coverUrl, let url = URL(string: urlStr) {
-            Task {
-                if let (data, _) = try? await URLSession.shared.data(from: url),
-                   let image = NSImage(data: data) {
-                    let artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-                    var info = MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
-                    info[MPMediaItemPropertyArtwork] = artwork
-                    MPNowPlayingInfoCenter.default().nowPlayingInfo = info
-                }
-            }
-        }
-    }
-
-    private func clearNowPlaying() {
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
 }

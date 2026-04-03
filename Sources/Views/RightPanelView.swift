@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Right Panel (Lyrics / Queue / History)
+// MARK: - Right Panel (Lyrics / Queue)
 
 struct RightPanelView: View {
     @EnvironmentObject var playerVM: PlayerViewModel
@@ -35,8 +35,6 @@ struct RightPanelView: View {
                 LyricsContent()
             case .queue:
                 QueueContent()
-            case .history:
-                HistoryContent()
             case .none:
                 EmptyView()
             }
@@ -253,74 +251,4 @@ struct QueueContent: View {
     }
 }
 
-// MARK: - History Content
 
-struct HistoryContent: View {
-    @EnvironmentObject var playerVM: PlayerViewModel
-    @Environment(\.themeColors) var tc
-    @State private var historySongs: [Song] = []
-    @State private var isLoading = true
-
-    var body: some View {
-        Group {
-            if isLoading {
-                VStack { ProgressView().scaleEffect(0.8) }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if historySongs.isEmpty {
-                VStack(spacing: Theme.Spacing.md) {
-                    Spacer()
-                    Image(systemName: "clock")
-                        .font(.system(size: 32))
-                        .foregroundColor(tc.textTertiary)
-                    Text("暂无播放历史")
-                        .font(.system(size: Theme.FontSize.body))
-                        .foregroundColor(tc.textSecondary)
-                    Spacer()
-                }
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(historySongs) { song in
-                            HStack(spacing: Theme.Spacing.md) {
-                                AlbumArtView(url: song.coverUrl, size: 36)
-                                    .cornerRadius(Theme.Radius.xs)
-
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(song.title)
-                                        .font(.system(size: Theme.FontSize.body, weight: .medium))
-                                        .foregroundColor(tc.textPrimary)
-                                        .lineLimit(1)
-                                    Text(song.artist)
-                                        .font(.system(size: Theme.FontSize.small))
-                                        .foregroundColor(tc.textTertiary)
-                                        .lineLimit(1)
-                                }
-
-                                Spacer()
-
-                                Text(song.formattedDuration)
-                                    .font(.system(size: Theme.FontSize.small, design: .monospaced))
-                                    .foregroundColor(tc.textTertiary)
-                            }
-                            .padding(.horizontal, Theme.Spacing.lg)
-                            .padding(.vertical, Theme.Spacing.sm)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                playerVM.selectSong(song, in: historySongs)
-                                playerVM.startPlayback()
-                            }
-
-                            Divider()
-                                .background(tc.divider)
-                                .padding(.leading, Theme.Spacing.lg + 36 + Theme.Spacing.md)
-                        }
-                    }
-                }
-            }
-        }
-        .task {
-            historySongs = (try? await DatabaseService.shared.loadHistory()) ?? []
-            isLoading = false
-        }
-    }
-}

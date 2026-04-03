@@ -5,48 +5,47 @@ struct MainView: View {
     @EnvironmentObject var playlistVM: PlaylistViewModel
     @Environment(\.themeColors) var tc
 
-    @State private var sidebarWidth: CGFloat = 260
+    @State private var sidebarWidth: CGFloat = 200
 
     var body: some View {
         HStack(spacing: 0) {
-            // Left: main content
-            VStack(spacing: 0) {
-                TitleBar()
+            // Left: content + player bar (stacked, player bar overlays bottom)
+            ZStack(alignment: .bottom) {
+                // Content layer
+                VStack(spacing: 0) {
+                    TitleBar()
 
-                Divider()
-                    .background(tc.divider)
+                    // Content area — full width, solid background
+                    HStack(spacing: 0) {
+                        // Sidebar
+                        PlaylistSidebarView()
+                            .frame(width: effectiveSidebarWidth)
 
-                // Content area
-                HStack(spacing: 0) {
-                    // Sidebar
-                    PlaylistSidebarView()
-                        .frame(width: effectiveSidebarWidth)
+                        // Draggable divider
+                        Rectangle()
+                            .fill(Color.clear)
+                            .frame(width: 6)
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture()
+                                    .onChanged { value in
+                                        let newWidth = value.startLocation.x + value.translation.width
+                                        sidebarWidth = min(max(newWidth, 120), 360)
+                                    }
+                            )
 
-                    // Draggable divider
-                    Rectangle()
-                        .fill(Color.clear)
-                        .frame(width: 6)
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    let newWidth = value.startLocation.x + value.translation.width
-                                    sidebarWidth = min(max(newWidth, 200), 360)
-                                }
-                        )
-
-                    // Main song list area
-                    if playlistVM.selectedPlaylist != nil {
-                        SongListView()
-                    } else {
-                        EmptyStateView()
+                        // Main song list area
+                        if playlistVM.selectedPlaylist != nil {
+                            SongListView()
+                        } else {
+                            EmptyStateView()
+                        }
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(tc.bgSecondary)
 
-                Divider()
-                    .background(tc.divider)
-
-                // Player bar
+                // Player bar — solid bg covers any gap at the bottom
                 PlayerBarView()
                     .frame(height: playerBarHeight)
             }
@@ -70,11 +69,11 @@ struct MainView: View {
     }
 
     private var effectiveSidebarWidth: CGFloat {
-        playerVM.rightPanel == .none ? 260 : 220
+        playerVM.rightPanel == .none ? sidebarWidth : 200
     }
 
     private var playerBarHeight: CGFloat {
-        playerVM.isMiniPlayer ? Theme.Sizes.miniPlayerHeight : Theme.Sizes.playerBarHeight
+        playerVM.isMiniPlayer ? Theme.Sizes.miniPlayerHeight : 88
     }
 }
 
@@ -87,44 +86,65 @@ struct TitleBar: View {
 
     var body: some View {
         HStack(spacing: Theme.Spacing.md) {
-            // App icon
             Image(systemName: "music.note.list")
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: 14, weight: .medium))
                 .foregroundColor(tc.accent)
 
             Text("MusicPlayer")
-                .font(.system(size: Theme.FontSize.heading, weight: .semibold))
+                .font(.system(size: Theme.FontSize.body, weight: .semibold))
                 .foregroundColor(tc.textPrimary)
 
             Spacer()
 
-            // Dark mode toggle
+            // Search field (center)
+            HStack(spacing: Theme.Spacing.sm) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 12))
+                    .foregroundColor(tc.textTertiary)
+                TextField("搜索歌曲、艺术家...", text: $playlistVM.searchText)
+                    .font(.system(size: Theme.FontSize.body))
+                    .textFieldStyle(.plain)
+                    .frame(width: 200)
+                if !playlistVM.searchText.isEmpty {
+                    Button(action: { playlistVM.searchText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(tc.textTertiary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, Theme.Spacing.md)
+            .padding(.vertical, Theme.Spacing.xs)
+            .background(RoundedRectangle(cornerRadius: Theme.Radius.md).fill(tc.bgTertiary))
+
+            Spacer()
+
             Button(action: cycleColorScheme) {
                 Image(systemName: colorSchemeIcon)
-                    .font(.system(size: 13))
+                    .font(.system(size: 12))
                     .foregroundColor(tc.textTertiary)
             }
             .buttonStyle(.plain)
             .help(colorSchemeHelp)
 
-            // Add playlist button
             Button(action: { playlistVM.showAddSheet = true }) {
-                HStack(spacing: Theme.Spacing.sm) {
+                HStack(spacing: Theme.Spacing.xs) {
                     Image(systemName: "plus")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                     Text("添加歌单")
-                        .font(.system(size: Theme.FontSize.body))
+                        .font(.system(size: Theme.FontSize.caption))
                 }
                 .foregroundColor(.white)
-                .padding(.horizontal, Theme.Spacing.lg)
-                .padding(.vertical, Theme.Spacing.sm)
+                .padding(.horizontal, Theme.Spacing.md)
+                .padding(.vertical, Theme.Spacing.xs)
                 .background(Capsule().fill(tc.accent))
             }
             .buttonStyle(.plain)
             .keyboardShortcut("n", modifiers: .command)
         }
-        .padding(.horizontal, Theme.Spacing.xxl)
-        .padding(.vertical, Theme.Spacing.lg)
+        .padding(.horizontal, Theme.Spacing.lg)
+        .padding(.vertical, Theme.Spacing.md)
         .background(tc.bgSecondary)
     }
 

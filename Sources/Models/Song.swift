@@ -9,7 +9,6 @@ struct Song: Identifiable, Codable, Equatable, Hashable {
     var duration: Int // seconds
     var playUrl: String?
     var coverUrl: String?
-    var isFavorite: Bool = false
 
     var formattedDuration: String {
         let min = duration / 60
