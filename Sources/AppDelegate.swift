@@ -16,6 +16,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let contentView = MainView()
             .environmentObject(PlayerViewModel.shared)
             .environmentObject(PlaylistViewModel.shared)
+            .themed()
 
         window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 640),
@@ -88,7 +89,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-// MARK: - Color Extension
+// MARK: - NSColor Hex Extension
+
 extension NSColor {
     convenience init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
@@ -112,9 +114,4 @@ extension NSColor {
     }
 }
 
-extension Color {
-    init(hex: String) {
-        let nsColor = NSColor(hex: hex)
-        self.init(nsColor: nsColor)
-    }
-}
+

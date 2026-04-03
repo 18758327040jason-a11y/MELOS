@@ -9,6 +9,7 @@ class AudioPlayerService: ObservableObject {
     private var player: AVPlayer?
     private var timeObserver: Any?
     private var playbackCompletion: ((Bool, String?) -> Void)?
+    var onSongFinished: (() -> Void)?
 
     @Published var isPlaying: Bool = false
     @Published var currentTime: Double = 0
@@ -116,7 +117,9 @@ class AudioPlayerService: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                self?.isPlaying = false
+                guard let self = self else { return }
+                self.isPlaying = false
+                self.onSongFinished?()
             }
         }
 

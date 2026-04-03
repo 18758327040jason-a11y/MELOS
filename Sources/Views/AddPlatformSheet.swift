@@ -57,6 +57,7 @@ struct PlainTextFieldView: NSViewRepresentable {
 struct AddPlatformSheet: View {
     @EnvironmentObject var playlistVM: PlaylistViewModel
     @Environment(\.dismiss) var dismiss
+    @Environment(\.themeColors) var tc
 
     @State private var urlInput: String = ""
 
@@ -68,9 +69,9 @@ struct AddPlatformSheet: View {
                 Button(action: { dismiss() }) {
                     Image(systemName: "xmark")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Theme.Palette.textSecondary)
+                        .foregroundColor(tc.textSecondary)
                         .frame(width: 28, height: 28)
-                        .background(Circle().fill(Theme.Palette.bgTertiary))
+                        .background(Circle().fill(tc.bgTertiary))
                 }
                 .buttonStyle(.plain)
             }
@@ -81,10 +82,10 @@ struct AddPlatformSheet: View {
             VStack(spacing: Theme.Spacing.sm) {
                 Text("添加歌单")
                     .font(.system(size: 20, weight: .semibold))
-                    .foregroundColor(Theme.Palette.textPrimary)
+                    .foregroundColor(tc.textPrimary)
                 Text("粘贴歌单链接，一键导入")
                     .font(.system(size: Theme.FontSize.body))
-                    .foregroundColor(Theme.Palette.textSecondary)
+                    .foregroundColor(tc.textSecondary)
             }
             .padding(.top, Theme.Spacing.md)
             .padding(.bottom, Theme.Spacing.xl)
@@ -108,7 +109,7 @@ struct AddPlatformSheet: View {
             VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
                 Text("歌单链接")
                     .font(.system(size: Theme.FontSize.caption, weight: .medium))
-                    .foregroundColor(Theme.Palette.textSecondary)
+                    .foregroundColor(tc.textSecondary)
 
                 HStack(spacing: Theme.Spacing.md) {
                     PlainTextFieldView(
@@ -133,7 +134,7 @@ struct AddPlatformSheet: View {
                                 .frame(width: 68, height: 44)
                                 .background(
                                     RoundedRectangle(cornerRadius: Theme.Radius.md)
-                                        .fill(urlInput.isEmpty ? Theme.Palette.textTertiary : Theme.Palette.accent)
+                                        .fill(urlInput.isEmpty ? tc.textTertiary : tc.accent)
                                 )
                         }
                     }
@@ -148,16 +149,16 @@ struct AddPlatformSheet: View {
             if let error = playlistVM.errorMessage {
                 HStack(spacing: Theme.Spacing.sm) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(Theme.Palette.error)
+                        .foregroundColor(tc.error)
                         .font(.system(size: 13))
                     Text(error)
                         .font(.system(size: Theme.FontSize.caption))
-                        .foregroundColor(Theme.Palette.error)
+                        .foregroundColor(tc.error)
                 }
                 .padding(Theme.Spacing.md)
                 .background(
                     RoundedRectangle(cornerRadius: Theme.Radius.sm)
-                        .fill(Theme.Palette.errorBg)
+                        .fill(tc.errorBg)
                 )
                 .padding(.horizontal, Theme.Spacing.xl)
                 .padding(.top, Theme.Spacing.md)
@@ -169,17 +170,17 @@ struct AddPlatformSheet: View {
             VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                 Text("支持格式：")
                     .font(.system(size: Theme.FontSize.small, weight: .medium))
-                    .foregroundColor(Theme.Palette.textTertiary)
+                    .foregroundColor(tc.textTertiary)
                 Text("QQ音乐: y.qq.com/n/ryqq/playlist/xxxxx")
                     .font(.system(size: Theme.FontSize.small, design: .monospaced))
-                    .foregroundColor(Theme.Palette.textTertiary)
+                    .foregroundColor(tc.textTertiary)
                 Text("网易云: music.163.com/playlist?id=xxxxx")
                     .font(.system(size: Theme.FontSize.small, design: .monospaced))
-                    .foregroundColor(Theme.Palette.textTertiary)
+                    .foregroundColor(tc.textTertiary)
             }
             .padding(Theme.Spacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.Palette.bgTertiary.opacity(0.5))
+            .background(tc.bgTertiary.opacity(0.5))
             .padding(.horizontal, Theme.Spacing.xl)
             .padding(.bottom, Theme.Spacing.xl)
         }
@@ -190,6 +191,7 @@ struct AddPlatformSheet: View {
 // MARK: - Platform Card
 
 struct PlatformCardView: View {
+    @Environment(\.themeColors) var tc
     let platform: Platform
     let icon: String
     let color: Color
@@ -207,13 +209,13 @@ struct PlatformCardView: View {
 
             Text(platform.rawValue)
                 .font(.system(size: Theme.FontSize.caption, weight: .semibold))
-                .foregroundColor(Theme.Palette.textPrimary)
+                .foregroundColor(tc.textPrimary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Theme.Spacing.lg)
         .background(
             RoundedRectangle(cornerRadius: Theme.Radius.md)
-                .fill(Theme.Palette.bgTertiary)
+                .fill(tc.bgTertiary)
         )
     }
 }

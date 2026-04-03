@@ -4,15 +4,26 @@ import SwiftUI
 
 struct PlayerBarView: View {
     @EnvironmentObject var playerVM: PlayerViewModel
+    @Environment(\.themeColors) var tc
 
     var body: some View {
+        VStack(spacing: 0) {
+            if playerVM.isMiniPlayer {
+                MiniPlayerView()
+            } else {
+                fullPlayerBar
+            }
+        }
+    }
+
+    private var fullPlayerBar: some View {
         ZStack {
             // Frosted glass background
             VisualEffectView(material: .headerView, blendingMode: .withinWindow)
                 .opacity(0.85)
 
             HStack(spacing: Theme.Spacing.xxl) {
-                // Left: song info + album art
+                // Left: song info + album art + favorite
                 SongInfoBlock()
 
                 Spacer()
@@ -22,12 +33,56 @@ struct PlayerBarView: View {
 
                 Spacer()
 
-                // Right: volume
-                VolumeControl()
-                    .frame(width: 120)
+                // Right: volume + panel toggles
+                HStack(spacing: Theme.Spacing.lg) {
+                    // Panel toggles
+                    PanelToggle(panel: .lyrics)
+                    PanelToggle(panel: .queue)
+                    PanelToggle(panel: .history)
+
+                    Divider()
+                        .frame(height: 20)
+                        .background(tc.divider)
+
+                    // Mini player toggle
+                    Button(action: { playerVM.isMiniPlayer = true }) {
+                        Image(systemName: "arrow.down.right.and.arrow.up.left")
+                            .font(.system(size: 11))
+                            .foregroundColor(tc.textTertiary)
+                    }
+                    .buttonStyle(.plain)
+
+                    VolumeControl()
+                        .frame(width: 120)
+                }
             }
             .padding(.horizontal, Theme.Spacing.xxl)
         }
+        .frame(height: Theme.Sizes.playerBarHeight)
+    }
+}
+
+// MARK: - Panel Toggle Button
+
+struct PanelToggle: View {
+    @EnvironmentObject var playerVM: PlayerViewModel
+    @Environment(\.themeColors) var tc
+    let panel: RightPanelType
+
+    var isActive: Bool { playerVM.rightPanel == panel }
+
+    var body: some View {
+        Button(action: {
+            withAnimation(Theme.Anim.fast) {
+                playerVM.rightPanel = isActive ? .none : panel
+            }
+        }) {
+            Image(systemName: panel.icon)
+                .font(.system(size: 13))
+                .foregroundColor(isActive ? tc.accent : tc.textTertiary)
+                .frame(width: 24, height: 24)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -35,37 +90,46 @@ struct PlayerBarView: View {
 
 struct SongInfoBlock: View {
     @EnvironmentObject var playerVM: PlayerViewModel
+    @Environment(\.themeColors) var tc
 
     var body: some View {
         HStack(spacing: Theme.Spacing.lg) {
             // Album art
-            AlbumArtView(
-                url: playerVM.currentSong?.coverUrl,
-                size: Theme.Sizes.albumArtSmall
-            )
+            AlbumArtView(url: playerVM.currentSong?.coverUrl, size: Theme.Sizes.albumArtSmall)
 
             // Title + artist
-            VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            VStack(alignment: .leading, spacing: 2) {
                 if let song = playerVM.currentSong {
                     Text(song.title)
                         .font(.system(size: Theme.FontSize.body, weight: .semibold))
-                        .foregroundColor(Theme.Palette.textPrimary)
+                        .foregroundColor(tc.textPrimary)
                         .lineLimit(1)
                     Text(song.artist)
                         .font(.system(size: Theme.FontSize.caption))
-                        .foregroundColor(Theme.Palette.textSecondary)
+                        .foregroundColor(tc.textSecondary)
                         .lineLimit(1)
                 } else {
                     Text("未播放")
                         .font(.system(size: Theme.FontSize.body))
-                        .foregroundColor(Theme.Palette.textTertiary)
+                        .foregroundColor(tc.textTertiary)
                     Text("")
                 }
+            }
+            .frame(width: 180, alignment: .leading)
+
+            // Favorite button
+            if playerVM.currentSong != nil {
+                Button(action: { playerVM.toggleFavorite() }) {
+                    Image(systemName: (playerVM.currentSong?.isFavorite ?? false) ? "heart.fill" : "heart")
+                        .font(.system(size: 14))
+                        .foregroundColor((playerVM.currentSong?.isFavorite ?? false) ? Color(hex: "EA4335") : tc.textTertiary)
+                }
+                .buttonStyle(.plain)
             }
 
             Spacer(minLength: 0)
         }
-        .frame(width: 240, alignment: .leading)
+        .frame(width: 280, alignment: .leading)
     }
 }
 
@@ -73,6 +137,7 @@ struct SongInfoBlock: View {
 
 struct PlaybackControls: View {
     @EnvironmentObject var playerVM: PlayerViewModel
+    @Environment(\.themeColors) var tc
 
     var body: some View {
         VStack(spacing: Theme.Spacing.sm) {
@@ -90,11 +155,8 @@ struct PlaybackControls: View {
                 Button(action: { handlePlayButton() }) {
                     ZStack {
                         Circle()
-                            .fill(buttonActive ? Theme.Palette.accent : Theme.Palette.bgTertiary)
-                            .frame(
-                                width: Theme.Sizes.playButtonLarge,
-                                height: Theme.Sizes.playButtonLarge
-                            )
+                            .fill(buttonActive ? tc.accent : tc.bgTertiary)
+                            .frame(width: Theme.Sizes.playButtonLarge, height: Theme.Sizes.playButtonLarge)
 
                         if playerVM.isLoading {
                             ProgressView()
@@ -104,7 +166,6 @@ struct PlaybackControls: View {
                             Image(systemName: buttonIcon)
                                 .font(.system(size: 18, weight: .bold))
                                 .foregroundColor(.white)
-                                .offset(x: playerVM.playbackState == .playing ? 0 : 2)
                         }
                     }
                 }
@@ -140,24 +201,15 @@ struct PlaybackControls: View {
         }
     }
 
-    // 是否可点击
-    private var buttonActive: Bool {
-        playerVM.playbackState != .idle
-    }
-
-    // 显示哪个图标：idle/ready/failed → ▶，playing → ⏸
+    private var buttonActive: Bool { playerVM.playbackState != .idle }
     private var buttonIcon: String {
         playerVM.playbackState == .playing ? "pause.fill" : "play.fill"
     }
 
     private func handlePlayButton() {
         switch playerVM.playbackState {
-        case .playing:
-            playerVM.togglePlayPause()
-        case .ready, .idle:
-            playerVM.startPlayback()
-        case .failed:
-            playerVM.startPlayback()
+        case .playing: playerVM.togglePlayPause()
+        case .ready, .idle, .failed: playerVM.startPlayback()
         }
     }
 }
@@ -165,6 +217,8 @@ struct PlaybackControls: View {
 // MARK: - Control Button
 
 struct ControlButton: View {
+    @EnvironmentObject var playerVM: PlayerViewModel
+    @Environment(\.themeColors) var tc
     let icon: String
     let size: CGFloat
     let action: () -> Void
@@ -174,7 +228,7 @@ struct ControlButton: View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: size, weight: .medium))
-                .foregroundColor(disabled ? Theme.Palette.textTertiary : Theme.Palette.textSecondary)
+                .foregroundColor(disabled ? tc.textTertiary : tc.textSecondary)
                 .frame(width: 28, height: 28)
         }
         .buttonStyle(.plain)
@@ -187,6 +241,7 @@ struct ControlButton: View {
 
 struct ProgressBar: View {
     @EnvironmentObject var playerVM: PlayerViewModel
+    @Environment(\.themeColors) var tc
     @State private var isDragging = false
     @State private var dragValue: Double = 0
     @State private var isHovering = false
@@ -197,25 +252,18 @@ struct ProgressBar: View {
     var body: some View {
         GeometryReader { geo in
             VStack(spacing: Theme.Spacing.xs) {
-                // Track
                 ZStack(alignment: .leading) {
-                    // Background
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(Theme.Palette.progressBar)
+                        .fill(tc.progressBar)
                         .frame(height: 3)
 
-                    // Filled
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(Theme.Palette.progressFill)
-                        .frame(
-                            width: progressWidth(in: geo),
-                            height: 3
-                        )
+                        .fill(tc.progressFill)
+                        .frame(width: progressWidth(in: geo), height: 3)
 
-                    // Knob
                     if isDragging || isHovering {
                         Circle()
-                            .fill(Theme.Palette.progressFill)
+                            .fill(tc.progressFill)
                             .frame(width: 12, height: 12)
                             .offset(x: progressWidth(in: geo) - 6)
                             .animation(Theme.Anim.fast, value: isDragging)
@@ -238,15 +286,14 @@ struct ProgressBar: View {
                         }
                 )
 
-                // Time labels
                 HStack {
                     Text(formatTime(displayTime))
                         .font(.system(size: Theme.FontSize.small, design: .monospaced))
-                        .foregroundColor(Theme.Palette.textTertiary)
+                        .foregroundColor(tc.textTertiary)
                     Spacer()
                     Text(formatTime(displayDuration))
                         .font(.system(size: Theme.FontSize.small, design: .monospaced))
-                        .foregroundColor(Theme.Palette.textTertiary)
+                        .foregroundColor(tc.textTertiary)
                 }
             }
         }
@@ -255,8 +302,7 @@ struct ProgressBar: View {
 
     private func progressWidth(in geo: GeometryProxy) -> CGFloat {
         guard playerVM.duration > 0 else { return 0 }
-        let ratio = displayTime / displayDuration
-        return CGFloat(ratio) * geo.size.width
+        return CGFloat(displayTime / displayDuration) * geo.size.width
     }
 
     private func formatTime(_ seconds: Double) -> String {
@@ -271,6 +317,7 @@ struct ProgressBar: View {
 
 struct VolumeControl: View {
     @EnvironmentObject var playerVM: PlayerViewModel
+    @Environment(\.themeColors) var tc
 
     var volumeIcon: String {
         if playerVM.volume == 0 { return "speaker.slash.fill" }
@@ -283,13 +330,13 @@ struct VolumeControl: View {
         HStack(spacing: Theme.Spacing.sm) {
             Image(systemName: volumeIcon)
                 .font(.system(size: 12))
-                .foregroundColor(Theme.Palette.volumeIcon)
+                .foregroundColor(tc.volumeIcon)
 
             Slider(value: Binding(
                 get: { playerVM.volume },
                 set: { playerVM.setVolume($0) }
             ), in: 0...1)
-            .tint(Theme.Palette.volumeFill)
+            .tint(tc.volumeFill)
         }
     }
 }
@@ -304,9 +351,7 @@ struct AlbumArtView: View {
         Group {
             if let urlString = url, let u = URL(string: urlString) {
                 AsyncImage(url: u) { image in
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
+                    image.resizable().aspectRatio(contentMode: .fill)
                 } placeholder: {
                     PlaceholderView()
                 }
@@ -320,11 +365,11 @@ struct AlbumArtView: View {
 
     private func PlaceholderView() -> some View {
         RoundedRectangle(cornerRadius: Theme.Radius.xs)
-            .fill(Theme.Palette.bgTertiary)
+            .fill(Color(hex: "F1F3F4"))
             .overlay(
                 Image(systemName: "music.note")
                     .font(.system(size: size * 0.3))
-                    .foregroundColor(Theme.Palette.textTertiary)
+                    .foregroundColor(Color(hex: "9AA0A6"))
             )
     }
 }

@@ -6,16 +6,10 @@ options:
   xcodeVersion: "15.0"
   generateEmptyDirectories: true
 
-settings:
-  base:
-    PRODUCT_NAME: MusicPlayer
-    MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: "1"
-    SWIFT_VERSION: "5.9"
-    MACOSX_DEPLOYMENT_TARGET: "14.0"
-    CODE_SIGN_IDENTITY: "-"
-    CODE_SIGN_STYLE: Manual
-    DEVELOPMENT_TEAM: ""
+packages:
+  SQLite:
+    url: https://github.com/stephencelis/SQLite.swift
+    from: "0.15.0"
 
 targets:
   MusicPlayer:
@@ -23,18 +17,21 @@ targets:
     platform: macOS
     sources:
       - path: Sources
+        excludes:
+          - "**/.DS_Store"
     settings:
       base:
-        INFOPLIST_FILE: Sources/Info.plist
         PRODUCT_BUNDLE_IDENTIFIER: com.dashu.musicplayer
-        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/../Frameworks"
-        COMBINE_HIDPI_IMAGES: YES
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_FILE: Sources/Info.plist
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        DEVELOPMENT_TEAM: ""
+        LD_RUNPATH_SEARCH_PATHS: "@executable_path/../Frameworks"
+        ENABLE_HARDENED_RUNTIME: NO
     dependencies:
-      - package: SQLite.swift
+      - package: SQLite
         product: SQLite
-
-packages:
-  SQLite.swift:
-    url: https://github.com/stephencelis/SQLite.swift
-    from: "0.15.0"

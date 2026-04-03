@@ -148,12 +148,6 @@ actor PlaylistSyncService {
         if let tracks = result["tracks"] as? [[String: Any]] {
             print("[NetEase] Found \(tracks.count) tracks in playlist")
             songs = tracks.prefix(100).compactMap { parseNetEaseSong($0) }
-        }
-
-        // Get playlist cover
-        var playlistCoverUrl = result["coverImgUrl"] as? String ?? result["picUrl"] as? String
-        if let url = playlistCoverUrl, url.hasPrefix("http://") {
-            playlistCoverUrl = "https://" + url.dropFirst(7)
         } else if let trackIds = result["trackIds"] as? [[String: Any]] {
             print("[NetEase] No tracks, fetching \(trackIds.count) trackIds...")
             let ids = trackIds.prefix(100).compactMap { $0["id"] as? Int }
@@ -163,6 +157,9 @@ actor PlaylistSyncService {
                 songs = trackList
             }
         }
+
+        // Get playlist cover (keep as-is)
+        let playlistCoverUrl = (result["coverImgUrl"] as? String) ?? (result["picUrl"] as? String)
 
         return Playlist(
             id: "netease_\(playlistId)",
@@ -213,10 +210,7 @@ actor PlaylistSyncService {
         let artist = artists.map { $0["name"] as? String ?? "" }.joined(separator: ", ")
         let album = (item["album"] as? [String: Any])?["name"] as? String
         var coverUrl = (item["album"] as? [String: Any])?["picUrl"] as? String
-        // Convert http to https for image loading
-        if let url = coverUrl, url.hasPrefix("http://") {
-            coverUrl = "https://" + url.dropFirst(7)
-        }
+        // Keep http URL as-is — some music.126.net URLs only work over http
         // duration is in milliseconds
         let duration = (item["duration"] as? Int ?? 0) / 1000
 

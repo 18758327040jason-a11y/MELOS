@@ -4,6 +4,7 @@ import SwiftUI
 
 struct PlaylistSidebarView: View {
     @EnvironmentObject var playlistVM: PlaylistViewModel
+    @Environment(\.themeColors) var tc
 
     var body: some View {
         VStack(spacing: 0) {
@@ -11,13 +12,13 @@ struct PlaylistSidebarView: View {
             HStack {
                 Text("歌单")
                     .font(.system(size: Theme.FontSize.caption, weight: .semibold))
-                    .foregroundColor(Theme.Palette.textTertiary)
+                    .foregroundColor(tc.textTertiary)
                     .textCase(.uppercase)
                     .kerning(0.5)
                 Spacer()
                 Text("\(playlistVM.playlists.count)")
                     .font(.system(size: Theme.FontSize.small, design: .monospaced))
-                    .foregroundColor(Theme.Palette.textTertiary)
+                    .foregroundColor(tc.textTertiary)
             }
             .padding(.horizontal, Theme.Spacing.lg)
             .padding(.top, Theme.Spacing.xl)
@@ -38,7 +39,7 @@ struct PlaylistSidebarView: View {
 
             Spacer()
         }
-        .background(Theme.Palette.bgSecondary)
+        .background(tc.bgSecondary)
     }
 }
 
@@ -46,20 +47,21 @@ struct PlaylistSidebarView: View {
 
 struct SidebarEmptyHint: View {
     @EnvironmentObject var playlistVM: PlaylistViewModel
+    @Environment(\.themeColors) var tc
 
     var body: some View {
         VStack(spacing: Theme.Spacing.lg) {
             Spacer()
             Image(systemName: "music.note.list")
                 .font(.system(size: 32))
-                .foregroundColor(Theme.Palette.textTertiary)
+                .foregroundColor(tc.textTertiary)
             Text("无歌单")
                 .font(.system(size: Theme.FontSize.body))
-                .foregroundColor(Theme.Palette.textSecondary)
+                .foregroundColor(tc.textSecondary)
             Button(action: { playlistVM.showAddSheet = true }) {
                 Text("添加")
                     .font(.system(size: Theme.FontSize.caption, weight: .medium))
-                    .foregroundColor(Theme.Palette.accent)
+                    .foregroundColor(tc.accent)
             }
             .buttonStyle(.plain)
             Spacer()
@@ -73,6 +75,7 @@ struct SidebarEmptyHint: View {
 struct PlaylistRow: View {
     @EnvironmentObject var playlistVM: PlaylistViewModel
     @EnvironmentObject var playerVM: PlayerViewModel
+    @Environment(\.themeColors) var tc
     let playlist: Playlist
 
     @State private var isHovered = false
@@ -83,7 +86,6 @@ struct PlaylistRow: View {
 
     var body: some View {
         HStack(spacing: Theme.Spacing.md) {
-            // Platform icon
             Image(systemName: playlist.platform.iconName)
                 .font(.system(size: 14))
                 .foregroundColor(Color(hex: playlist.platform.brandColor))
@@ -92,20 +94,19 @@ struct PlaylistRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(playlist.name)
                     .font(.system(size: Theme.FontSize.body, weight: isSelected ? .semibold : .regular))
-                    .foregroundColor(isSelected ? Theme.Palette.accent : Theme.Palette.textPrimary)
+                    .foregroundColor(isSelected ? tc.accent : tc.textPrimary)
                     .lineLimit(1)
 
                 Text("\(playlist.songCount) 首")
                     .font(.system(size: Theme.FontSize.small))
-                    .foregroundColor(Theme.Palette.textTertiary)
+                    .foregroundColor(tc.textTertiary)
             }
 
             Spacer()
 
-            // Playing indicator
             if playerVM.currentSong != nil && playerVM.currentPlaylist.contains(where: { $0.id == playerVM.currentSong?.id }) {
                 Circle()
-                    .fill(Theme.Palette.accent)
+                    .fill(tc.accent)
                     .frame(width: 6, height: 6)
             }
         }
@@ -115,8 +116,8 @@ struct PlaylistRow: View {
             RoundedRectangle(cornerRadius: Theme.Radius.sm)
                 .fill(
                     isSelected
-                        ? Theme.Palette.accentLight.opacity(0.2)
-                        : (isHovered ? Theme.Palette.hover : Color.clear)
+                        ? tc.accentLight.opacity(0.2)
+                        : (isHovered ? tc.hover : Color.clear)
                 )
         )
         .contentShape(Rectangle())

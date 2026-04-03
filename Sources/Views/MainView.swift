@@ -3,77 +3,109 @@ import SwiftUI
 struct MainView: View {
     @EnvironmentObject var playerVM: PlayerViewModel
     @EnvironmentObject var playlistVM: PlaylistViewModel
+    @Environment(\.themeColors) var tc
+
+    @State private var sidebarWidth: CGFloat = 260
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Title bar
-            TitleBar()
+        HStack(spacing: 0) {
+            // Left: main content
+            VStack(spacing: 0) {
+                TitleBar()
 
-            Divider()
+                Divider()
+                    .background(tc.divider)
 
-            // Content
-            HStack(spacing: 0) {
-                // Sidebar
-                PlaylistSidebarView()
-                    .frame(width: sidebarWidth)
+                // Content area
+                HStack(spacing: 0) {
+                    // Sidebar
+                    PlaylistSidebarView()
+                        .frame(width: effectiveSidebarWidth)
 
-                // Draggable divider
-                Rectangle()
-                    .fill(Color.clear)
-                    .frame(width: 6)
-                    .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture()
-                            .onChanged { value in
-                                let newWidth = value.startLocation.x + value.translation.width
-                                sidebarWidth = min(max(newWidth, 200), 360)
-                            }
-                    )
+                    // Draggable divider
+                    Rectangle()
+                        .fill(Color.clear)
+                        .frame(width: 6)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    let newWidth = value.startLocation.x + value.translation.width
+                                    sidebarWidth = min(max(newWidth, 200), 360)
+                                }
+                        )
 
-                // Main area
-                if let _ = playlistVM.selectedPlaylist {
-                    SongListView()
-                } else {
-                    EmptyStateView()
+                    // Main song list area
+                    if playlistVM.selectedPlaylist != nil {
+                        SongListView()
+                    } else {
+                        EmptyStateView()
+                    }
                 }
+
+                Divider()
+                    .background(tc.divider)
+
+                // Player bar
+                PlayerBarView()
+                    .frame(height: playerBarHeight)
             }
+            .frame(maxWidth: .infinity)
 
-            Divider()
-
-            // Player bar
-            PlayerBarView()
-                .frame(height: Theme.Sizes.playerBarHeight)
+            // Right panel (slides in from right)
+            if playerVM.rightPanel != .none {
+                RightPanelView()
+                    .transition(.move(edge: .trailing))
+                    .animation(Theme.Anim.fast, value: playerVM.rightPanel)
+            }
         }
         .frame(minWidth: 800, minHeight: 540)
-        .background(Theme.Palette.bgPrimary)
+        .background(tc.bgPrimary)
         .sheet(isPresented: $playlistVM.showAddSheet) {
-            AddPlatformSheet()
+            AddPlatformSheet().themed()
         }
         .task {
             await playlistVM.loadPlaylists()
         }
     }
 
-    @State private var sidebarWidth: CGFloat = 260
+    private var effectiveSidebarWidth: CGFloat {
+        playerVM.rightPanel == .none ? 260 : 220
+    }
+
+    private var playerBarHeight: CGFloat {
+        playerVM.isMiniPlayer ? Theme.Sizes.miniPlayerHeight : Theme.Sizes.playerBarHeight
+    }
 }
 
 // MARK: - Title Bar
 
 struct TitleBar: View {
     @EnvironmentObject var playlistVM: PlaylistViewModel
+    @EnvironmentObject var playerVM: PlayerViewModel
+    @Environment(\.themeColors) var tc
 
     var body: some View {
         HStack(spacing: Theme.Spacing.md) {
             // App icon
             Image(systemName: "music.note.list")
                 .font(.system(size: 16, weight: .medium))
-                .foregroundColor(Theme.Palette.accent)
+                .foregroundColor(tc.accent)
 
             Text("MusicPlayer")
                 .font(.system(size: Theme.FontSize.heading, weight: .semibold))
-                .foregroundColor(Theme.Palette.textPrimary)
+                .foregroundColor(tc.textPrimary)
 
             Spacer()
+
+            // Dark mode toggle
+            Button(action: cycleColorScheme) {
+                Image(systemName: colorSchemeIcon)
+                    .font(.system(size: 13))
+                    .foregroundColor(tc.textTertiary)
+            }
+            .buttonStyle(.plain)
+            .help(colorSchemeHelp)
 
             // Add playlist button
             Button(action: { playlistVM.showAddSheet = true }) {
@@ -86,17 +118,38 @@ struct TitleBar: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, Theme.Spacing.lg)
                 .padding(.vertical, Theme.Spacing.sm)
-                .background(
-                    Capsule()
-                        .fill(Theme.Palette.accent)
-                )
+                .background(Capsule().fill(tc.accent))
             }
             .buttonStyle(.plain)
-            .keyboardShortcut("n", modifiers: .command) // Cmd+N
+            .keyboardShortcut("n", modifiers: .command)
         }
         .padding(.horizontal, Theme.Spacing.xxl)
         .padding(.vertical, Theme.Spacing.lg)
-        .background(Theme.Palette.bgSecondary)
+        .background(tc.bgSecondary)
+    }
+
+    private var colorSchemeIcon: String {
+        switch playerVM.darkModeOverride {
+        case .some(true): return "moon.fill"
+        case .some(false): return "sun.max.fill"
+        case nil: return "circle.lefthalf.filled"
+        }
+    }
+
+    private var colorSchemeHelp: String {
+        switch playerVM.darkModeOverride {
+        case .some(true): return "当前：深色模式，点击切换跟随系统"
+        case .some(false): return "当前：浅色模式，点击切换跟随系统"
+        case nil: return "当前：跟随系统，点击切换深色模式"
+        }
+    }
+
+    private func cycleColorScheme() {
+        switch playerVM.darkModeOverride {
+        case nil: playerVM.darkModeOverride = true
+        case true: playerVM.darkModeOverride = false
+        case false: playerVM.darkModeOverride = nil
+        }
     }
 }
 
@@ -104,30 +157,30 @@ struct TitleBar: View {
 
 struct EmptyStateView: View {
     @EnvironmentObject var playlistVM: PlaylistViewModel
+    @Environment(\.themeColors) var tc
 
     var body: some View {
         VStack(spacing: Theme.Spacing.xxl) {
             Spacer()
 
-            // Large icon
             ZStack {
                 Circle()
-                    .fill(Theme.Palette.accentLight.opacity(0.3))
+                    .fill(tc.accentLight.opacity(0.3))
                     .frame(width: 120, height: 120)
 
                 Image(systemName: "music.note.list")
                     .font(.system(size: 44))
-                    .foregroundColor(Theme.Palette.accent.opacity(0.6))
+                    .foregroundColor(tc.accent.opacity(0.6))
             }
 
             VStack(spacing: Theme.Spacing.sm) {
                 Text("开始听音乐")
                     .font(.system(size: Theme.FontSize.title, weight: .semibold))
-                    .foregroundColor(Theme.Palette.textPrimary)
+                    .foregroundColor(tc.textPrimary)
 
                 Text("添加 QQ 音乐或网易云音乐歌单\n从左侧歌单列表选择要播放的歌曲")
                     .font(.system(size: Theme.FontSize.body))
-                    .foregroundColor(Theme.Palette.textSecondary)
+                    .foregroundColor(tc.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineSpacing(4)
             }
@@ -142,17 +195,14 @@ struct EmptyStateView: View {
                 .foregroundColor(.white)
                 .padding(.horizontal, Theme.Spacing.xl)
                 .padding(.vertical, Theme.Spacing.md)
-                .background(
-                    Capsule()
-                        .fill(Theme.Palette.accent)
-                )
+                .background(Capsule().fill(tc.accent))
             }
             .buttonStyle(.plain)
 
             Spacer()
         }
         .frame(maxWidth: .infinity)
-        .background(Theme.Palette.bgPrimary)
+        .background(tc.bgPrimary)
     }
 }
 
@@ -160,4 +210,5 @@ struct EmptyStateView: View {
     MainView()
         .environmentObject(PlayerViewModel.shared)
         .environmentObject(PlaylistViewModel.shared)
+        .themed()
 }
