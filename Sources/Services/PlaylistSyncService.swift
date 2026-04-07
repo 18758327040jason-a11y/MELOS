@@ -111,55 +111,78 @@ actor PlaylistSyncService {
 
     // MARK: - NetEase Music
 
+
     private func syncNetEaseMusic(playlistURL: String) async throws -> Playlist {
         guard let playlistId = Platform.netEase.playlistIDFromURL(playlistURL) else {
             throw SyncError.invalidURL
         }
 
-        let apiURL = "https://music.163.com/api/playlist/detail"
-        var request = URLRequest(url: URL(string: apiURL)!)
-        request.httpMethod = "POST"
-        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
-        request.setValue("https://music.163.com", forHTTPHeaderField: "Referer")
-        request.setValue("https://music.163.com", forHTTPHeaderField: "Origin")
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        request.httpBody = "id=\(playlistId)".data(using: .utf8)
-        request.timeoutInterval = 15
+        // Use yt-dlp to get full playlist (API only returns 10 tracks)
+        let playlistURLFragment = "https://music.163.com/#/playlist?id=\(playlistId)"
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/local/bin/yt-dlp")
+        process.arguments = ["--flat-playlist", "--print", "%(title)s | %(id)s", playlistURLFragment]
+        let outPipe = Pipe()
+        process.standardOutput = outPipe
+        process.standardError = FileHandle.nullDevice
 
-        let (data, _) = try await URLSession.shared.data(for: request)
+        try process.run()
+        process.waitUntilExit()
 
-        let rawString = String(data: data, encoding: .utf8) ?? ""
-        print("[NetEase Playlist] raw: \(rawString.prefix(1000))")
-
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw SyncError.parseError("无法解析网易云音乐响应 - JSON无效")
+        let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
+        guard let output = String(data: outData, encoding: .utf8) else {
+            throw SyncError.parseError("无法读取 yt-dlp 输出")
         }
 
-        // result IS the playlist object directly (not result.playlist)
-        guard let result = json["result"] as? [String: Any] else {
-            print("[NetEase] JSON keys: \(json.keys)")
-            throw SyncError.parseError("无法解析网易云音乐响应 - 找不到playlist数据")
-        }
+        let lines = output.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        print("[NetEase] yt-dlp returned \(lines.count) songs")
 
-        let playlistName = result["name"] as? String ?? "网易云音乐歌单"
         var songs: [Song] = []
+        var firstCoverUrl: String?
 
-        // API returns full track objects in "tracks" field
-        if let tracks = result["tracks"] as? [[String: Any]] {
-            print("[NetEase] Found \(tracks.count) tracks in playlist")
-            songs = tracks.prefix(100).compactMap { parseNetEaseSong($0) }
-        } else if let trackIds = result["trackIds"] as? [[String: Any]] {
-            print("[NetEase] No tracks, fetching \(trackIds.count) trackIds...")
-            let ids = trackIds.prefix(100).compactMap { $0["id"] as? Int }
-            if !ids.isEmpty {
-                let trackList = try await fetchNetEaseTracks(ids: ids)
-                print("[NetEase] fetchNetEaseTracks returned \(trackList.count) songs")
-                songs = trackList
+        for line in lines where !line.isEmpty {
+            let parts = line.split(separator: "|", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+            guard parts.count == 2, let songId = Int(parts[1]) else { continue }
+            let title = parts[0]
+            let netEaseURL = "https://music.163.com/#/song?id=\(songId)"
+
+            if firstCoverUrl == nil {
+                let coverProc = Process()
+                coverProc.executableURL = URL(fileURLWithPath: "/usr/local/bin/yt-dlp")
+                coverProc.arguments = ["--print", "%(thumbnail)s", "--single-video", netEaseURL]
+                let coverPipe = Pipe()
+                coverProc.standardOutput = coverPipe
+                coverProc.standardError = FileHandle.nullDevice
+                try? coverProc.run()
+                coverProc.waitUntilExit()
+                let coverData = coverPipe.fileHandleForReading.readDataToEndOfFile()
+                firstCoverUrl = String(data: coverData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
             }
+
+            let song = Song(
+                id: "netease_\(songId)",
+                platform: .netEase,
+                title: title,
+                artist: "NetEase",
+                album: "网易云音乐歌单",
+                duration: 0,
+                playUrl: netEaseURL,
+                coverUrl: nil
+            )
+            songs.append(song)
         }
 
-        // Get playlist cover (keep as-is)
-        let playlistCoverUrl = (result["coverImgUrl"] as? String) ?? (result["picUrl"] as? String)
+        // Get playlist name from yt-dlp
+        let nameProc = Process()
+        nameProc.executableURL = URL(fileURLWithPath: "/usr/local/bin/yt-dlp")
+        nameProc.arguments = ["--print", "%(playlist_title)s", "--playlist-items", "1", playlistURLFragment]
+        let namePipe = Pipe()
+        nameProc.standardOutput = namePipe
+        nameProc.standardError = FileHandle.nullDevice
+        try? nameProc.run()
+        nameProc.waitUntilExit()
+        let nameData = namePipe.fileHandleForReading.readDataToEndOfFile()
+        let playlistName = String(data: nameData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "网易云音乐歌单"
 
         return Playlist(
             id: "netease_\(playlistId)",
@@ -168,36 +191,10 @@ actor PlaylistSyncService {
             songCount: songs.count,
             lastSyncTime: Date(),
             songs: songs,
-            coverUrl: playlistCoverUrl
+            coverUrl: firstCoverUrl
         )
     }
 
-    private func fetchNetEaseTracks(ids: [Int]) async throws -> [Song] {
-        // Use song/-enhance/getplayerplayinfo API which returns full track info
-        let apiURL = "https://music.163.com/api/song/player-detail"
-        var request = URLRequest(url: URL(string: apiURL)!)
-        request.httpMethod = "POST"
-        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
-        request.setValue("https://music.163.com", forHTTPHeaderField: "Referer")
-        request.setValue("https://music.163.com", forHTTPHeaderField: "Origin")
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        let idsStr = ids.map { String($0) }.joined(separator: ",")
-        request.httpBody = "ids=[\(idsStr)]&types=1".data(using: .utf8)
-        request.timeoutInterval = 15
-
-        let (data, _) = try await URLSession.shared.data(for: request)
-        let raw = String(data: data, encoding: .utf8) ?? ""
-        print("[NetEase Tracks] raw: \(raw.prefix(500))")
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            print("[NetEase Tracks] JSON parse failed")
-            return []
-        }
-        print("[NetEase Tracks] JSON keys: \(json.keys)")
-        if let songs = json["songs"] as? [[String: Any]] {
-            return songs.compactMap { parseNetEaseSong($0) }
-        }
-        return []
-    }
 
     private func parseNetEaseSong(_ item: [String: Any]) -> Song? {
         guard let id = item["id"] as? Int,
