@@ -7,8 +7,11 @@ class AudioPlayerService: ObservableObject {
     static let shared = AudioPlayerService()
 
     private var player: AVPlayer?
+    private var audioPlayer: AVAudioPlayer?
     private var timeObserver: Any?
+    private var audioPlayerTimer: Timer?
     private var playbackCompletion: ((Bool, String?) -> Void)?
+    private var cancellables = Set<AnyCancellable>()
     var onSongFinished: (() -> Void)?
 
     @Published var isPlaying: Bool = false
@@ -17,7 +20,7 @@ class AudioPlayerService: ObservableObject {
     @Published var volume: Double = 0.8
     @Published var isLoading: Bool = false
 
-    private var currentSong: Song?
+    private(set) var currentSong: Song?
 
     private let logPath = "/tmp/musicplayer_debug.log"
 
@@ -33,74 +36,122 @@ class AudioPlayerService: ObservableObject {
         try? line.write(toFile: "/tmp/musicplayer_debug.log", atomically: true, encoding: .utf8)
     }
 
+    // ── Local file priority playback URL resolution ──
+    private func playbackURL(for song: Song) -> URL? {
+        if let localURL = DownloadService.shared.localPath(for: song.id) {
+            logToFile("[AudioService] local: \(localURL.path)")
+            return localURL
+        }
+        if let urlString = resolvedStreamingURL(for: song), !urlString.isEmpty {
+            logToFile("[AudioService] stream: \(urlString)")
+            return URL(string: urlString)
+        }
+        return nil
+    }
+
+    private func resolvedStreamingURL(for song: Song) -> String? {
+        if let existing = song.playUrl, !existing.isEmpty { return existing }
+        switch song.platform {
+        case .netEase:
+            let id = song.id.replacingOccurrences(of: "netease_", with: "")
+            return "https://music.163.com/song/media/outer/url?id=\(id)"
+        case .qq:
+            let id = song.id.replacingOccurrences(of: "qq_", with: "")
+            return "https://dl.stream.qqmusic.qq.com/C100\(id).m4a?fromtag=0&guid=0"
+        }
+    }
+
     func startPlayback(song: Song, completion: @escaping (Bool, String?) -> Void) {
-        playbackCompletion = completion
+        logToFile("[AudioService] startPlayback: \(song.title)")
 
-        let playUrlString: String = {
-            if let existing = song.playUrl, !existing.isEmpty {
-                return existing
-            }
-            switch song.platform {
-            case .netEase:
-                let id = song.id.replacingOccurrences(of: "netease_", with: "")
-                return "https://music.163.com/song/media/outer/url?id=\(id)"
-            case .qq:
-                let id = song.id.replacingOccurrences(of: "qq_", with: "")
-                return "https://dl.stream.qqmusic.qq.com/C100\(id).m4a?fromtag=0&guid=0"
-            }
-        }()
-
-        logToFile("[AudioService] startPlayback: \(song.title) | url: \(playUrlString)")
-
-        guard let url = URL(string: playUrlString) else {
-            logToFile("[AudioService] ERROR: invalid URL")
-            completion(false, "播放地址无效")
-            playbackCompletion = nil
+        guard let url = playbackURL(for: song) else {
+            isLoading = false
+            completion(false, "无可用播放地址")
             return
         }
 
-        stop()
+        // Same song + same local file: resume without rebuilding player
+        if song.id == currentSong?.id, audioPlayer != nil, url.isFileURL {
+            logToFile("[AudioService] same song local — resume")
+            playbackCompletion = completion
+            audioPlayer?.volume = Float(volume)
+            audioPlayer?.play()
+            isPlaying = true
+            isLoading = false
+            duration = audioPlayer?.duration ?? 0
+            completion(true, nil)
+            startAudioPlayerTimer()
+            return
+        }
+
+        playbackCompletion = nil
+        stopSilently()
+
         currentSong = song
         isLoading = true
+        playbackCompletion = completion
 
+        logToFile("[AudioService] url=\(url.absoluteString) local=\(url.isFileURL)")
+
+        // ── Local file: AVAudioPlayer ──
+        if url.isFileURL {
+            do {
+                audioPlayer = try AVAudioPlayer(contentsOf: url)
+                audioPlayer?.volume = Float(volume)
+                audioPlayer?.prepareToPlay()
+                audioPlayer?.play()
+                isPlaying = true
+                isLoading = false
+                duration = audioPlayer?.duration ?? 0
+                currentTime = 0
+                logToFile("[AudioService] AVAudioPlayer playing duration=\(duration)")
+                completion(true, nil)
+                startAudioPlayerTimer()
+            } catch {
+                isLoading = false
+                completion(false, error.localizedDescription)
+            }
+            return
+        }
+
+        // ── Streaming: AVPlayer ──
         let asset = AVURLAsset(url: url)
         let playerItem = AVPlayerItem(asset: asset)
         player = AVPlayer(playerItem: playerItem)
         player?.volume = Float(volume)
 
-        // Monitor status with timeout fallback
+        var timerFired = false
         let timer = Timer.scheduledTimer(withTimeInterval: 12, repeats: false) { [weak self] _ in
             Task { @MainActor in
-                guard let self = self else { return }
-                if self.isLoading {
-                    self.isLoading = false
-                    let msg = "网络超时，播放失败"
-                    self.logToFile("[AudioService] TIMEOUT: \(msg)")
-                    self.playbackCompletion?(false, msg)
-                    self.playbackCompletion = nil
-                }
+                guard let self = self, self.isLoading, !timerFired else { return }
+                timerFired = true
+                self.cleanupPlayer()
+                self.isLoading = false
+                self.isPlaying = false
+                self.playbackCompletion?(false, "网络超时，播放失败")
+                self.playbackCompletion = nil
             }
         }
 
-        // Status observer
-        let observer = playerItem.observe(\.status, options: [.new]) { [weak self] item, _ in
-            Task { @MainActor in
-                guard let self = self else { return }
+        playerItem.publisher(for: \.status)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] status in
+                guard let self = self, !timerFired else { return }
                 timer.invalidate()
-                switch item.status {
+                switch status {
                 case .readyToPlay:
                     self.player?.play()
                     self.isPlaying = true
                     self.isLoading = false
-                    self.logToFile("[AudioService] readyToPlay -> started")
+                    let d = playerItem.duration.seconds
+                    self.duration = d.isNaN ? 0 : d
                     self.playbackCompletion?(true, nil)
                     self.playbackCompletion = nil
+                    self.startTimeObserver()
                 case .failed:
                     self.isLoading = false
                     self.isPlaying = false
-                    let err = item.error?.localizedDescription ?? "加载失败"
-                    self.logToFile("[AudioService] failed: \(err)")
-                    self.playbackCompletion?(false, err)
+                    self.playbackCompletion?(false, playerItem.error?.localizedDescription ?? "加载失败")
                     self.playbackCompletion = nil
                 case .unknown:
                     break
@@ -108,78 +159,104 @@ class AudioPlayerService: ObservableObject {
                     break
                 }
             }
-        }
+            .store(in: &cancellables)
 
-        // End-of-track
         NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: playerItem,
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
-                guard let self = self else { return }
-                self.isPlaying = false
-                self.onSongFinished?()
+                self?.isPlaying = false
+                self?.onSongFinished?()
             }
         }
 
-        // Duration
         Task {
-            if let durationCM = try? await asset.load(.duration) {
+            if let dur = try? await asset.load(.duration) {
                 await MainActor.run {
-                    self.duration = durationCM.seconds
+                    let d = dur.seconds
+                    if !d.isNaN { self.duration = d }
                 }
             }
         }
+    }
 
-        startTimeObserver()
+    // ── Local file polling ──
+    private func startAudioPlayerTimer() {
+        audioPlayerTimer?.invalidate()
+        audioPlayerTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self = self, let ap = self.audioPlayer else { return }
+                self.currentTime = ap.currentTime
+                self.duration = ap.duration
+                self.objectWillChange.send()
+                if !ap.isPlaying && self.isPlaying {
+                    self.isPlaying = false
+                    self.audioPlayerTimer?.invalidate()
+                    self.audioPlayerTimer = nil
+                    self.onSongFinished?()
+                }
+            }
+        }
+    }
+
+    private func cleanupPlayer() {
+        removeTimeObserver()
+        cancellables.removeAll()
+        player?.pause()
+        player = nil
     }
 
     func pause() {
+        audioPlayer?.pause()
         player?.pause()
         isPlaying = false
-        logToFile("[AudioService] paused")
     }
 
     func cancelLoading() {
         isLoading = false
-        logToFile("[AudioService] cancelLoading: isLoading=false")
     }
 
     func resume() {
+        audioPlayer?.play()
         player?.play()
         isPlaying = true
-        logToFile("[AudioService] resumed")
     }
 
     func togglePlayPause() {
-        if isPlaying {
-            pause()
-        } else {
-            resume()
-        }
+        if isPlaying { pause() } else { resume() }
     }
 
-    func stop() {
-        removeTimeObserver()
-        player?.pause()
-        player = nil
+    private func stopSilently() {
+        audioPlayerTimer?.invalidate()
+        audioPlayerTimer = nil
+        audioPlayer?.stop()
+        audioPlayer = nil
+        cleanupPlayer()
         isPlaying = false
         currentTime = 0
         duration = 0
         currentSong = nil
-        playbackCompletion?(false, "播放已停止")
+        isLoading = false
+        cancellables.removeAll()
+    }
+
+    func stop() {
+        stopSilently()
+        if let cb = playbackCompletion { cb(false, "播放已停止") }
         playbackCompletion = nil
     }
 
     func seek(to seconds: Double) {
-        let time = CMTime(seconds: seconds, preferredTimescale: 600)
-        player?.seek(to: time)
+        audioPlayer?.currentTime = seconds
+        player?.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
         currentTime = seconds
     }
 
     func setVolume(_ value: Double) {
         volume = value
+        audioPlayer?.volume = Float(value)
         player?.volume = Float(value)
         UserDefaults.standard.set(value, forKey: "playerVolume")
     }
@@ -190,13 +267,14 @@ class AudioPlayerService: ObservableObject {
         timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             Task { @MainActor in
                 self?.currentTime = time.seconds
+                self?.objectWillChange.send()
             }
         }
     }
 
     private func removeTimeObserver() {
-        if let observer = timeObserver {
-            player?.removeTimeObserver(observer)
+        if let obs = timeObserver {
+            player?.removeTimeObserver(obs)
             timeObserver = nil
         }
     }

@@ -198,10 +198,17 @@ struct SongRow: View {
                 .padding(.trailing, Theme.Spacing.md)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(song.title)
-                    .font(.system(size: Theme.FontSize.body, weight: isCurrentSong ? .semibold : .medium))
-                    .foregroundColor(isCurrentSong ? tc.accent : tc.textPrimary)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Text(song.title)
+                        .font(.system(size: Theme.FontSize.body, weight: isCurrentSong ? .semibold : .medium))
+                        .foregroundColor(isCurrentSong ? tc.accent : tc.textPrimary)
+                        .lineLimit(1)
+                    if DownloadService.shared.isDownloaded(song.id) {
+                        Image(systemName: "arrow.down.circle.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(Color(hex: "34C759"))
+                    }
+                }
                 Text(song.artist)
                     .font(.system(size: Theme.FontSize.small))
                     .foregroundColor(isCurrentSong ? tc.accent : tc.textTertiary)

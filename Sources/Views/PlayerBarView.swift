@@ -108,17 +108,7 @@ struct PlayerBarView: View {
                     // RIGHT: volume + actions
                     HStack(spacing: Theme.Spacing.md) {
                         // Volume
-                        HStack(spacing: 6) {
-                            Image(systemName: volumeIcon)
-                                .font(.system(size: 11))
-                                .foregroundColor(tc.textTertiary)
-                            Slider(value: Binding(
-                                get: { playerVM.volume },
-                                set: { playerVM.setVolume($0) }
-                            ), in: 0...1)
-                            .tint(tc.accent)
-                            .frame(width: 68)
-                        }
+                        HoverVolumeSlider()
 
                         Divider().frame(height: 16).background(tc.divider)
 
@@ -193,6 +183,7 @@ struct NetEaseProgressBar: View {
     @EnvironmentObject var playerVM: PlayerViewModel
     @Environment(\.themeColors) var tc
     @State private var isDragging = false
+    @State private var isHovering = false
     @State private var dragValue: Double = 0
 
     private var displayTime: Double { isDragging ? dragValue : playerVM.currentTime }
@@ -204,22 +195,32 @@ struct NetEaseProgressBar: View {
                 // Background track
                 RoundedRectangle(cornerRadius: 1.5)
                     .fill(tc.progressBar)
-                    .frame(height: 3)
+                    .frame(height: isDragging || isHovering ? 4 : 3)
 
                 // Filled portion
                 RoundedRectangle(cornerRadius: 1.5)
                     .fill(tc.progressFill)
-                    .frame(width: max(0, progressWidth(in: geo)), height: 3)
+                    .frame(width: max(0, progressWidth(in: geo)), height: isDragging || isHovering ? 4 : 3)
 
-                // Thumb — always visible
+                // Thumb — only visible on hover or drag
                 Circle()
                     .fill(Color.white)
-                    .frame(width: 10, height: 10)
+                    .frame(width: isDragging || isHovering ? 12 : 0)
                     .shadow(color: .black.opacity(0.15), radius: 2, x: 0, y: 1)
-                    .offset(x: progressWidth(in: geo) - 5)
+                    .offset(x: progressWidth(in: geo) - (isDragging || isHovering ? 6 : 0))
+                    .animation(.easeOut(duration: 0.1), value: isHovering)
             }
-            .frame(height: 16)
+            .frame(height: 20)
+            .overlay(alignment: .trailing) {
+                if isHovering || isDragging {
+                    Text(formatTime(displayDuration))
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(tc.textSecondary)
+                        .padding(.trailing, 4)
+                }
+            }
             .contentShape(Rectangle())
+            .onHover { isHovering = $0 }
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
@@ -234,8 +235,7 @@ struct NetEaseProgressBar: View {
                     }
             )
         }
-        .frame(height: 16)
-        .padding(.horizontal, 0)
+        .frame(height: 20)
     }
 
     private func progressWidth(in geo: GeometryProxy) -> CGFloat {
@@ -250,6 +250,40 @@ struct NetEaseProgressBar: View {
 }
 
 // MARK: - Album Art
+
+
+// MARK: - Volume Slider with Hover Effect
+
+struct HoverVolumeSlider: View {
+    @EnvironmentObject var playerVM: PlayerViewModel
+    @Environment(\.themeColors) var tc
+    @State private var isHovering = false
+
+    private var volumeIcon: String {
+        if playerVM.volume == 0 { return "speaker.slash.fill" }
+        if playerVM.volume < 0.33 { return "speaker.wave.1.fill" }
+        if playerVM.volume < 0.66 { return "speaker.wave.2.fill" }
+        return "speaker.wave.3.fill"
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: volumeIcon)
+                .font(.system(size: 11))
+                .foregroundColor(tc.textTertiary)
+                .frame(width: 14)
+            Slider(value: Binding(
+                get: { playerVM.volume },
+                set: { playerVM.setVolume($0) }
+            ), in: 0...1)
+            .tint(tc.accent)
+            .opacity(isHovering ? 1 : 0.6)
+            .animation(.easeOut(duration: 0.15), value: isHovering)
+            .frame(width: 60)
+        }
+        .onHover { isHovering = $0 }
+    }
+}
 
 struct AlbumArtView: View {
     let url: String?

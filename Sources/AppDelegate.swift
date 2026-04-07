@@ -3,10 +3,23 @@ import SwiftUI
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var window: NSWindow!
+    private var spaceEventMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Set up menu bar with Edit menu (enables Cmd+C/V/A system shortcuts)
         setupMenuBar()
+
+        // Register space bar to toggle play/pause (works even when focus is in text fields)
+        spaceEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            // Space key = keyCode 49, no modifiers
+            if event.keyCode == 49 && event.modifierFlags.isEmpty {
+                Task { @MainActor in
+                    PlayerViewModel.shared.togglePlayPause()
+                }
+                return nil // consume the event
+            }
+            return event
+        }
 
         // Initialize database
         Task {
