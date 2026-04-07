@@ -58,6 +58,8 @@ class PlayerViewModel: ObservableObject {
     @Published var currentIndex: Int = -1
     @Published var playbackState: PlaybackState = .idle
     @Published var playbackError: String?
+    // Published wrapper so SwiftUI tracks currentTime changes
+    @Published var currentTime: Double = 0
 
     // UI state
     @Published var rightPanel: RightPanelType = .none
@@ -67,9 +69,9 @@ class PlayerViewModel: ObservableObject {
     @AppStorage("darkModeOverride") var darkModeOverride: Bool?
 
     let audioService = AudioPlayerService.shared
+    private var timeCancellable: AnyCancellable?
 
     var isPlaying: Bool { audioService.isPlaying }
-    var currentTime: Double { audioService.currentTime }
     var duration: Double { audioService.duration }
     var volume: Double { audioService.volume }
     var isLoading: Bool { audioService.isLoading }
@@ -82,7 +84,11 @@ class PlayerViewModel: ObservableObject {
         }
     }
 
-    private init() {}
+    private init() {
+        timeCancellable = audioService.$currentTime
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] t in self?.currentTime = t }
+    }
 
     // MARK: - Select (highlight only)
 

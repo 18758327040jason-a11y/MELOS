@@ -185,7 +185,7 @@ class AudioPlayerService: ObservableObject {
     // ── Local file polling ──
     private func startAudioPlayerTimer() {
         audioPlayerTimer?.invalidate()
-        audioPlayerTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+        audioPlayerTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self = self, let ap = self.audioPlayer else { return }
                 self.currentTime = ap.currentTime
@@ -231,6 +231,7 @@ class AudioPlayerService: ObservableObject {
     private func stopSilently() {
         audioPlayerTimer?.invalidate()
         audioPlayerTimer = nil
+        removeTimeObserver()
         audioPlayer?.stop()
         audioPlayer = nil
         cleanupPlayer()
@@ -263,11 +264,12 @@ class AudioPlayerService: ObservableObject {
 
     private func startTimeObserver() {
         removeTimeObserver()
-        let interval = CMTime(seconds: 0.5, preferredTimescale: 600)
+        let interval = CMTime(seconds: 0.033, preferredTimescale: 600)
         timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+            guard let self = self else { return }
             Task { @MainActor in
-                self?.currentTime = time.seconds
-                self?.objectWillChange.send()
+                self.currentTime = time.seconds
+                self.objectWillChange.send()
             }
         }
     }

@@ -211,12 +211,13 @@ struct NetEaseProgressBar: View {
                     .animation(.easeOut(duration: 0.1), value: isHovering)
             }
             .frame(height: 20)
-            .overlay(alignment: .trailing) {
+            .overlay(alignment: .bottomTrailing) {
                 if isHovering || isDragging {
                     Text(formatTime(displayDuration))
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(tc.textSecondary)
-                        .padding(.trailing, 4)
+                        .padding(.trailing, 6)
+                        .padding(.bottom, 10)
                 }
             }
             .contentShape(Rectangle())

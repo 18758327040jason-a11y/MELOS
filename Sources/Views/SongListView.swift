@@ -18,19 +18,22 @@ struct SongListView: View {
                     SongListEmptyState()
                 } else {
                     ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(spacing: 0) {
-                                SongTableHeader()
-                                ForEach(Array(playlistVM.filteredSongs.enumerated()), id: \.element.id) { index, song in
-                                    SongRow(song: song, index: index + 1)
-                                        .id(song.id)
+                        GeometryReader { geo in
+                            ScrollView {
+                                LazyVStack(spacing: 0) {
+                                    SongTableHeader()
+                                    ForEach(Array(playlistVM.filteredSongs.enumerated()), id: \.element.id) { index, song in
+                                        SongRow(song: song, index: index + 1)
+                                            .id(song.id)
+                                    }
                                 }
                             }
-                        }
-                        .onChange(of: playerVM.currentSong?.id) { _, newId in
-                            if let id = newId {
-                                withAnimation(Theme.Anim.medium) {
-                                    proxy.scrollTo(id, anchor: .center)
+                            .frame(height: geo.size.height - (playerVM.isMiniPlayer ? 48 : 88))
+                            .onChange(of: playerVM.currentSong?.id) { _, newId in
+                                if let id = newId {
+                                    withAnimation(Theme.Anim.medium) {
+                                        proxy.scrollTo(id, anchor: .center)
+                                    }
                                 }
                             }
                         }
