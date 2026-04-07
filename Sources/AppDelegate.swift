@@ -42,7 +42,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.setFrameAutosaveName("MusicPlayerMainWindow")
         window.minSize = NSSize(width: 700, height: 480)
         window.titlebarAppearsTransparent = true
-        window.title = "MusicPlayer"
+        window.title = ""
         window.contentView = NSHostingView(rootView: contentView)
         window.makeKeyAndOrderFront(nil)
         window.backgroundColor = NSColor(hex: "#FFFFFF")
@@ -69,9 +69,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(appMenuItem)
         let appMenu = NSMenu()
         appMenuItem.submenu = appMenu
-        appMenu.addItem(withTitle: "About MusicPlayer", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: "About Melos", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         appMenu.addItem(NSMenuItem.separator())
-        appMenu.addItem(withTitle: "Quit MusicPlayer", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: "Quit Melos", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 
         // Edit menu (enables Cmd+C/V/A in all text fields)
         let editMenuItem = NSMenuItem()

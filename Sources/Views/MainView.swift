@@ -90,7 +90,7 @@ struct TitleBar: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(tc.accent)
 
-            Text("MusicPlayer")
+            Text("Melos")
                 .font(.system(size: Theme.FontSize.body, weight: .semibold))
                 .foregroundColor(tc.textPrimary)
 
