@@ -78,7 +78,6 @@ actor PlaylistSyncService {
             id: "qq_\(playlistid)",
             platform: .qq,
             name: playlistName,
-            songCount: songs.count,
             lastSyncTime: Date(),
             songs: songs
         )
@@ -120,7 +119,7 @@ actor PlaylistSyncService {
         // Use yt-dlp to get full playlist (API only returns 10 tracks)
         let playlistURLFragment = "https://music.163.com/#/playlist?id=\(playlistId)"
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/local/bin/yt-dlp")
+        process.executableURL = URL(fileURLWithPath: "/opt/homebrew/bin/yt-dlp")
         process.arguments = ["--flat-playlist", "--print", "%(title)s | %(id)s", playlistURLFragment]
         let outPipe = Pipe()
         process.standardOutput = outPipe
@@ -148,7 +147,7 @@ actor PlaylistSyncService {
 
             if firstCoverUrl == nil {
                 let coverProc = Process()
-                coverProc.executableURL = URL(fileURLWithPath: "/usr/local/bin/yt-dlp")
+                coverProc.executableURL = URL(fileURLWithPath: "/opt/homebrew/bin/yt-dlp")
                 coverProc.arguments = ["--print", "%(thumbnail)s", "--single-video", netEaseURL]
                 let coverPipe = Pipe()
                 coverProc.standardOutput = coverPipe
@@ -174,7 +173,7 @@ actor PlaylistSyncService {
 
         // Get playlist name from yt-dlp
         let nameProc = Process()
-        nameProc.executableURL = URL(fileURLWithPath: "/usr/local/bin/yt-dlp")
+        nameProc.executableURL = URL(fileURLWithPath: "/opt/homebrew/bin/yt-dlp")
         nameProc.arguments = ["--print", "%(playlist_title)s", "--playlist-items", "1", playlistURLFragment]
         let namePipe = Pipe()
         nameProc.standardOutput = namePipe
@@ -188,7 +187,6 @@ actor PlaylistSyncService {
             id: "netease_\(playlistId)",
             platform: .netEase,
             name: playlistName,
-            songCount: songs.count,
             lastSyncTime: Date(),
             songs: songs,
             coverUrl: firstCoverUrl

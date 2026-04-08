@@ -96,7 +96,6 @@ actor DatabaseService {
                 id: pid,
                 platform: platform,
                 name: row[pName],
-                songCount: row[pSongCount],
                 lastSyncTime: lastSync,
                 songs: playlistSongs
             )
