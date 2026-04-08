@@ -120,7 +120,7 @@ actor PlaylistSyncService {
         let playlistURLFragment = "https://music.163.com/#/playlist?id=\(playlistId)"
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/opt/homebrew/bin/yt-dlp")
-        process.arguments = ["--flat-playlist", "--print", "%(title)s | %(id)s", playlistURLFragment]
+        process.arguments = ["--flat-playlist", "--print", "%(title)s | %(duration)s | %(id)s", playlistURLFragment]
         let outPipe = Pipe()
         process.standardOutput = outPipe
         process.standardError = FileHandle.nullDevice
@@ -140,9 +140,11 @@ actor PlaylistSyncService {
         var firstCoverUrl: String?
 
         for line in lines where !line.isEmpty {
-            let parts = line.split(separator: "|", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
-            guard parts.count == 2, let songId = Int(parts[1]) else { continue }
+            // Format: "title | duration | id" (duration may be empty string if unavailable)
+            let parts = line.split(separator: "|", maxSplits: 2).map { $0.trimmingCharacters(in: .whitespaces) }
+            guard parts.count == 3, let songId = Int(parts[2]) else { continue }
             let title = parts[0]
+            let duration = Int(parts[1]) ?? 0
             let netEaseURL = "https://music.163.com/#/song?id=\(songId)"
 
             if firstCoverUrl == nil {
@@ -162,9 +164,9 @@ actor PlaylistSyncService {
                 id: "netease_\(songId)",
                 platform: .netEase,
                 title: title,
-                artist: "NetEase",
+                artist: "网易云音乐",
                 album: "网易云音乐歌单",
-                duration: 0,
+                duration: duration,
                 playUrl: netEaseURL,
                 coverUrl: nil
             )
